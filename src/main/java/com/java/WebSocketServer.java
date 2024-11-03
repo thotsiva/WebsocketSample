@@ -74,6 +74,79 @@ import io.vertx.core.http.ServerWebSocket;
 //    }
 //}
 
+// if only message object is gzipped
+//public class WebSocketServer {
+//
+//    private final Gson gson = new Gson();
+//
+//    public void handleWebSocket(ServerWebSocket webSocket) {
+//        webSocket.handler(buffer -> {
+//            String incomingMessage = buffer.toString();
+//            ReceiveMessage receiveMessage = parseMessage(incomingMessage);
+//            if (receiveMessage != null) {
+//                callBotAdapter(receiveMessage);
+//            }
+//        });
+//    }
+//
+//    private ReceiveMessage parseMessage(String message) {
+//        ReceiveMessage receiveMessage;
+//
+//        // First, parse the incoming JSON message
+//        try {
+//            receiveMessage = gson.fromJson(message, ReceiveMessage.class);
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            return null; // Return null if parsing fails
+//        }
+//
+//        // Check if the message field is a gzipped Base64 string
+//        if (receiveMessage.message instanceof String) {
+//            String compressedMessage = (String) receiveMessage.message;
+//            String decompressedMessage = decompressIfGzipped(compressedMessage);
+//
+//            // If decompression is successful, set the message field
+//            if (decompressedMessage != null) {
+//                receiveMessage.message = decompressedMessage; // Replace with decompressed message
+//            } else {
+//                System.out.println("Message field is not a valid gzipped string or Base64 encoded.");
+//            }
+//        }
+//
+//        return receiveMessage;
+//    }
+//
+//    private String decompressIfGzipped(String base64Message) {
+//        // Attempt to decode the message from Base64
+//        byte[] compressed;
+//        try {
+//            compressed = Base64.getDecoder().decode(base64Message);
+//        } catch (IllegalArgumentException e) {
+//            // If decoding fails, this is not Base64; return null
+//            return null;
+//        }
+//
+//        // Attempt to decompress the gzipped data
+//        try (GZIPInputStream gzipInputStream = new GZIPInputStream(new ByteArrayInputStream(compressed))) {
+//            StringBuilder outStr = new StringBuilder();
+//            byte[] data = new byte[1024];
+//            int len;
+//            while ((len = gzipInputStream.read(data)) != -1) {
+//                outStr.append(new String(data, 0, len));
+//            }
+//            return outStr.toString();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            return null; // Return null if any exception occurs during decompression
+//        }
+//    }
+//
+//    private void callBotAdapter(ReceiveMessage receiveMessage) {
+//        // Handle the parsed message object
+//        System.out.println("Received message: " + receiveMessage);
+//    }
+//}
+
 
 public class WebSocketServer {
 
@@ -89,31 +162,22 @@ public class WebSocketServer {
         });
     }
 
-    private ReceiveMessage parseMessage(String message) {
-        ReceiveMessage receiveMessage;
+    private ReceiveMessage parseMessage(String gzippedMessage) {
+        // Decompress the gzipped message
+        String jsonMessage = decompressIfGzipped(gzippedMessage);
 
-        // First, parse the incoming JSON message
+        if (jsonMessage == null) {
+            System.out.println("Failed to decompress the gzipped message.");
+            return null; // Handle failure case appropriately
+        }
+
+        // Now parse the decompressed JSON message
         try {
-            receiveMessage = gson.fromJson(message, ReceiveMessage.class);
+            return gson.fromJson(jsonMessage, ReceiveMessage.class);
         } catch (Exception e) {
             e.printStackTrace();
             return null; // Return null if parsing fails
         }
-
-        // Check if the message field is a gzipped Base64 string
-        if (receiveMessage.message instanceof String) {
-            String compressedMessage = (String) receiveMessage.message;
-            String decompressedMessage = decompressIfGzipped(compressedMessage);
-
-            // If decompression is successful, set the message field
-            if (decompressedMessage != null) {
-                receiveMessage.message = decompressedMessage; // Replace with decompressed message
-            } else {
-                System.out.println("Message field is not a valid gzipped string or Base64 encoded.");
-            }
-        }
-
-        return receiveMessage;
     }
 
     private String decompressIfGzipped(String base64Message) {

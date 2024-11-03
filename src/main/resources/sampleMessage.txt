@@ -1,0 +1,7 @@
+{
+    "UserId": "user123",
+    "conversationId": "conv456",
+    "channel": "websocket",
+    "message": "H4sIAAAAAAAA/wvJyCxWAKJEhYKcxMw8hZLUihKF3NTi4sT0VD0AGgYe1x0AAAA=",
+    "agent": "agent007"
+}

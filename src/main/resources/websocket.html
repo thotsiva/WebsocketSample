@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            height: 300px;
+            padding: 10px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        #sendMessageButton {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        input, textarea {
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Client</h1>
+
+    <div id="messages"></div>
+
+    <textarea id="messageInput" rows="4" placeholder="Type your message here..."></textarea>
+    <button id="sendMessageButton">Send Message</button>
+
+    <script>
+        const socketUrl = "wss://aagentcorewebsocket-qa.aexp.com/v1/message"; // Replace with your WebSocket URL
+        const token = "YOUR_AUTHORIZATION_TOKEN"; // Replace with the actual authorization token
+        
+        let socket;
+
+        // Function to establish WebSocket connection
+        function connectWebSocket() {
+            // Establish WebSocket connection
+            socket = new WebSocket('ws://localhost:8085');
+
+            // Event handler for connection open
+            socket.onopen = () => {
+                displayMessage("Connected to WebSocket server.");
+            };
+
+            // Event handler for incoming messages
+            socket.onmessage = (event) => {
+                displayMessage("Received: " + event.data);
+            };
+
+            // Event handler for WebSocket errors
+            socket.onerror = (error) => {
+                displayMessage("WebSocket Error: " + error.message);
+            };
+
+            // Event handler for connection close
+            socket.onclose = () => {
+                displayMessage("Connection closed.");
+            };
+        }
+
+        // Function to send a message to the WebSocket server
+        function sendMessage() {
+            const message = document.getElementById("messageInput").value;
+            if (message && socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(message);
+                displayMessage("Sent: " + message);
+                document.getElementById("messageInput").value = ""; // Clear the input after sending
+            } else {
+                displayMessage("WebSocket is not open or message is empty.");
+            }
+        }
+
+        // Function to display messages in the UI
+        function displayMessage(message) {
+            const messagesDiv = document.getElementById("messages");
+            const newMessage = document.createElement("div");
+            newMessage.textContent = message;
+            messagesDiv.appendChild(newMessage);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
+        }
+
+        // Initialize WebSocket connection when the page loads
+        window.onload = connectWebSocket;
+
+        // Button event listener for sending messages
+        document.getElementById("sendMessageButton").onclick = sendMessage;
+    </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+1. WebSocket Compression with RxJava and Vert.x
+When you configure setCompression(true) in WebSocket (via Vert.x or any WebSocket implementation), it means the WebSocket protocol itself will automatically compress the data before sending it over the connection. This is typically using the permessage-deflate extension of WebSocket, which handles the compression.
+Setting the Content-Encoding: gzip header is usually not necessary for WebSocket, since WebSocket compression is independent of HTTP content encoding (like gzip). It's the WebSocket frame that will handle the compression at a lower level, not the HTTP headers.
+So, when data is sent from your WebSocket to another microservice, it will already be compressed by the WebSocket protocol if the compression is enabled on the WebSocket connection.
+
+2. The Role of the Microservice (Bot Adapter)
+If your bot adapter microservice is receiving the data via WebSocket, it will need to handle the incoming compressed data appropriately.
+If your microservice is using WebSocket as well, it should automatically decompress the data, assuming the WebSocket connection supports the same compression mechanism (e.g., permessage-deflate).
+If you're sending the data over HTTP (from the WebSocket to the microservice), and the data has been gzipped or compressed in a different way (e.g., via gzip in the payload, not WebSocket compression), your microservice will need to unzip or decompress it manually. However, WebSocket compression and gzip compression (for HTTP payloads) are separate mechanisms, so if the WebSocket itself is compressing the payload (with setCompression(true)), you do not need to perform additional gzip compression unless it's a requirement for the specific service.
+3. What Do You Need to Do?
+WebSocket to WebSocket communication: If your bot adapter is also receiving WebSocket connections, the compression will happen automatically if you have setCompression(true) enabled on the sender WebSocket. You do not need to gzip the data yourself before sending it.
+
+WebSocket to HTTP communication: If you're sending the data over HTTP (for example, via HTTP API to your bot adapter microservice), and you've set Content-Encoding: gzip, you will need to gzip the data before sending it. However, WebSocket compression doesn't directly translate to HTTP compression in the payload, so you would need to apply gzip manually if that's the format required by the receiving HTTP service.
+
+To Summarize:
+If you're using WebSocket compression (setCompression(true)), the data will be compressed automatically before sending. You do not need to gzip it manually.
+If you're sending the payload over HTTP to the bot adapter, and it expects gzipped content, then gzip the payload manually before transferring it.
+In general, the WebSocket compression (setCompression(true)) and HTTP compression (like gzip in headers) are separate concerns, and whether you need to manually gzip the payload depends on your transfer protocol (WebSocket vs HTTP) and the expectations of the receiving system (microservice).

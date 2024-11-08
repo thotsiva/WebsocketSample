@@ -32,7 +32,7 @@
         // Function to initiate the WebSocket connection
         function connectWebSocket() {
             // Replace with your actual WebSocket URL
-            socket = new WebSocket('wss://your-hydra-websocket-url');
+            socket = new WebSocket('wss://your-hydra-websocket-url'); // Replace with the actual URL
 
             socket.onopen = function(event) {
                 console.log('WebSocket connected!');
@@ -40,8 +40,15 @@
             };
 
             socket.onmessage = function(event) {
-                console.log('Received from WebSocket:', event.data);
-                appendMessage('Received: ' + event.data);
+                console.log('Message received from WebSocket:', event.data);  // Log raw data
+                try {
+                    // Attempt to parse as JSON if it's in JSON format
+                    const parsedData = JSON.parse(event.data);
+                    appendMessage('Received (JSON): ' + JSON.stringify(parsedData, null, 2));
+                } catch (error) {
+                    // If not JSON, display raw message
+                    appendMessage('Received (Raw): ' + event.data);
+                }
             };
 
             socket.onerror = function(event) {
@@ -52,19 +59,7 @@
             socket.onclose = function(event) {
                 console.log('WebSocket connection closed.');
                 appendMessage('Disconnected from WebSocket server.');
-
-                // Optionally reconnect on close
-                setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
             };
-        }
-
-        // Function to send a test message or a ping (if needed)
-        function sendTestMessage() {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send('ping');  // Send a ping or subscription message
-            } else {
-                console.log('WebSocket is not open yet!');
-            }
         }
 
         // Function to append messages to the UI
@@ -78,7 +73,6 @@
         // Connect to WebSocket server when page loads
         window.onload = function() {
             connectWebSocket();
-            setInterval(sendTestMessage, 10000); // Send "ping" every 10 seconds (if needed)
         };
     </script>
 

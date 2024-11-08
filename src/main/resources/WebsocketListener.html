@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Listener</title>
+    <title>Real-time WebSocket Stream Listener</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -21,7 +21,7 @@
 </head>
 <body>
 
-    <h2>WebSocket Message Listener</h2>
+    <h2>Real-time WebSocket Stream Listener</h2>
 
     <div id="messages"></div>
 
@@ -29,36 +29,33 @@
         const messagesDiv = document.getElementById('messages');
         let socket;
 
-        // Function to initiate the WebSocket connection
+        // Connect to Binance's public WebSocket stream for BTC/USDT market data
         function connectWebSocket() {
-            // Replace with your actual WebSocket URL
-            socket = new WebSocket('wss://your-hydra-websocket-url'); // Replace with the actual URL
+            const url = 'wss://stream.binance.com:9443/ws/btcusdt@trade'; // Real-time market data for BTC/USDT
+            socket = new WebSocket(url);
 
+            // Event: WebSocket is connected
             socket.onopen = function(event) {
-                console.log('WebSocket connected!');
-                appendMessage('Connected to WebSocket server.');
+                console.log('WebSocket connected to Binance stream!');
+                appendMessage('Connected to WebSocket stream.');
             };
 
+            // Event: Message received from the WebSocket
             socket.onmessage = function(event) {
-                console.log('Message received from WebSocket:', event.data);  // Log raw data
-                try {
-                    // Attempt to parse as JSON if it's in JSON format
-                    const parsedData = JSON.parse(event.data);
-                    appendMessage('Received (JSON): ' + JSON.stringify(parsedData, null, 2));
-                } catch (error) {
-                    // If not JSON, display raw message
-                    appendMessage('Received (Raw): ' + event.data);
-                }
+                console.log('Message received from WebSocket:', event.data);
+                appendMessage('Received: ' + event.data);  // Display real-time market data in UI
             };
 
+            // Event: WebSocket error (e.g., connection problems)
             socket.onerror = function(event) {
                 console.error('WebSocket error:', event);
-                appendMessage('WebSocket error: ' + event);
+                appendMessage('WebSocket error: ' + (event ? event.message : 'Unknown error'));
             };
 
+            // Event: WebSocket connection closed
             socket.onclose = function(event) {
                 console.log('WebSocket connection closed.');
-                appendMessage('Disconnected from WebSocket server.');
+                appendMessage('Disconnected from WebSocket stream.');
             };
         }
 
@@ -67,10 +64,10 @@
             const msgDiv = document.createElement('div');
             msgDiv.textContent = message;
             messagesDiv.appendChild(msgDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom of the div
         }
 
-        // Connect to WebSocket server when page loads
+        // Initialize WebSocket connection when the page loads
         window.onload = function() {
             connectWebSocket();
         };

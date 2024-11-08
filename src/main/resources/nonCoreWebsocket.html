@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        #message-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>WebSocket Message Listener</h2>
+
+    <div id="messages"></div>
+
+    <input type="text" id="message-input" placeholder="Type a message..." />
+    <button onclick="sendMessage()">Send Message</button>
+
+    <script>
+        const socket = new WebSocket('wss://your-websocket-server.com'); // Replace with your WebSocket server URL
+        const messagesDiv = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+
+        // Open WebSocket connection
+        socket.addEventListener('open', function(event) {
+            console.log('WebSocket connected!');
+            appendMessage('Connected to WebSocket server.');
+        });
+
+        // Listen for messages from the WebSocket server
+        socket.addEventListener('message', function(event) {
+            appendMessage('Received: ' + event.data);
+        });
+
+        // Handle WebSocket errors
+        socket.addEventListener('error', function(event) {
+            console.error('WebSocket error:', event);
+            appendMessage('Error connecting to WebSocket.');
+        });
+
+        // Handle WebSocket closure
+        socket.addEventListener('close', function(event) {
+            console.log('WebSocket closed.');
+            appendMessage('Disconnected from WebSocket server.');
+        });
+
+        // Function to send a message to the WebSocket server
+        function sendMessage() {
+            const message = messageInput.value;
+            if (message) {
+                socket.send(message);
+                appendMessage('Sent: ' + message);
+                messageInput.value = ''; // Clear input field
+            }
+        }
+
+        // Function to append messages to the UI
+        function appendMessage(message) {
+            const msgDiv = document.createElement('div');
+            msgDiv.textContent = message;
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
+        }
+    </script>
+
+</body>
+</html>

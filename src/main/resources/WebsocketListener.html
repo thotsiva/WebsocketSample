@@ -17,16 +17,6 @@
             margin-bottom: 10px;
             background-color: #f9f9f9;
         }
-        button {
-            padding: 10px 15px;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
     </style>
 </head>
 <body>
@@ -37,30 +27,45 @@
 
     <script>
         const messagesDiv = document.getElementById('messages');
-        
-        // Replace with your actual Hydra WebSocket URL
-        const socket = new WebSocket('wss://your-hydra-websocket-url');
+        let socket;
 
-        socket.onopen = function(event) {
-            console.log('WebSocket connected!');
-            appendMessage('Connected to WebSocket server.');
-        };
+        // Function to initiate the WebSocket connection
+        function connectWebSocket() {
+            // Replace with your actual WebSocket URL
+            socket = new WebSocket('wss://your-hydra-websocket-url');
 
-        socket.onmessage = function(event) {
-            // Log the received message to the console for debugging
-            console.log('Received from WebSocket:', event.data);
-            appendMessage('Received: ' + event.data);
-        };
+            socket.onopen = function(event) {
+                console.log('WebSocket connected!');
+                appendMessage('Connected to WebSocket server.');
+            };
 
-        socket.onerror = function(event) {
-            console.error('WebSocket error:', event);
-            appendMessage('WebSocket error: ' + event);
-        };
+            socket.onmessage = function(event) {
+                console.log('Received from WebSocket:', event.data);
+                appendMessage('Received: ' + event.data);
+            };
 
-        socket.onclose = function(event) {
-            console.log('WebSocket connection closed.');
-            appendMessage('Disconnected from WebSocket server.');
-        };
+            socket.onerror = function(event) {
+                console.error('WebSocket error:', event);
+                appendMessage('WebSocket error: ' + event);
+            };
+
+            socket.onclose = function(event) {
+                console.log('WebSocket connection closed.');
+                appendMessage('Disconnected from WebSocket server.');
+
+                // Optionally reconnect on close
+                setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
+            };
+        }
+
+        // Function to send a test message or a ping (if needed)
+        function sendTestMessage() {
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send('ping');  // Send a ping or subscription message
+            } else {
+                console.log('WebSocket is not open yet!');
+            }
+        }
 
         // Function to append messages to the UI
         function appendMessage(message) {
@@ -70,6 +75,11 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
         }
 
+        // Connect to WebSocket server when page loads
+        window.onload = function() {
+            connectWebSocket();
+            setInterval(sendTestMessage, 10000); // Send "ping" every 10 seconds (if needed)
+        };
     </script>
 
 </body>

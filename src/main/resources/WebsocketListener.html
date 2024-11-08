@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSocket Message Listener</title>
+    <title>WebSocket Listener</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -36,34 +36,31 @@
     <div id="messages"></div>
 
     <script>
-        // Replace with your WebSocket server URL
-        const socket = new WebSocket('wss://your-websocket-server.com');
-
-        // Element to display the messages
         const messagesDiv = document.getElementById('messages');
+        
+        // Replace with your actual Hydra WebSocket URL
+        const socket = new WebSocket('wss://your-hydra-websocket-url');
 
-        // WebSocket onOpen event: When the connection is established
-        socket.addEventListener('open', function(event) {
+        socket.onopen = function(event) {
             console.log('WebSocket connected!');
             appendMessage('Connected to WebSocket server.');
-        });
+        };
 
-        // WebSocket onMessage event: When a message is received
-        socket.addEventListener('message', function(event) {
+        socket.onmessage = function(event) {
+            // Log the received message to the console for debugging
+            console.log('Received from WebSocket:', event.data);
             appendMessage('Received: ' + event.data);
-        });
+        };
 
-        // WebSocket onError event: When there is an error
-        socket.addEventListener('error', function(event) {
+        socket.onerror = function(event) {
             console.error('WebSocket error:', event);
-            appendMessage('Error occurred in WebSocket connection.');
-        });
+            appendMessage('WebSocket error: ' + event);
+        };
 
-        // WebSocket onClose event: When the connection is closed
-        socket.addEventListener('close', function(event) {
+        socket.onclose = function(event) {
             console.log('WebSocket connection closed.');
             appendMessage('Disconnected from WebSocket server.');
-        });
+        };
 
         // Function to append messages to the UI
         function appendMessage(message) {
@@ -72,6 +69,7 @@
             messagesDiv.appendChild(msgDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to bottom
         }
+
     </script>
 
 </body>

@@ -1,0 +1,139 @@
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #f7f7f7;
+  color: #333;
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3 {
+  color: #333;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+/* Reduced heading sizes */
+h1 {
+  font-size: 1.5em;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.2em;
+}
+
+h3 {
+  font-size: 1em;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px; /* A more compact container width */
+  margin: 40px auto;
+  padding: 30px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* WebSocket Form Layout */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Increased gap between elements for clarity */
+}
+
+/* Label Styling */
+label {
+  font-size: 1em;
+  margin-bottom: 5px;
+  color: #333;
+  display: block; /* Make labels block to align properly */
+}
+
+/* Input, Select, Textarea */
+input, button {
+  padding: 10px;
+  font-size: 1em;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+input {
+  height: 40px; /* Adjusting input height for better alignment */
+}
+
+button {
+  background-color: #007BFF;
+  color: white;
+  padding: 10px 20px;
+  font-size: 1em;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  width: 100%;
+  max-width: 200px;
+  align-self: center;
+  margin-top: 10px; /* Space between button and other elements */
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* WebSocket Log Area */
+#ws-log {
+  background-color: #f4f4f4;
+  padding: 15px;
+  border-radius: 4px;
+  margin-top: 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  border: 1px solid #ddd;
+  height: 200px; /* Set height to make the log scrollable */
+  overflow-y: auto; /* Add scrollable behavior */
+}
+
+/* Center content inside container */
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Section Spacing */
+section {
+  margin-bottom: 30px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    margin: 20px;
+    padding: 20px;
+  }
+
+  input, button {
+    font-size: 0.9em;
+  }
+
+  button {
+    height: 35px;
+    width: 100%;
+  }
+
+  #ws-log {
+    font-size: 0.85em;
+    height: 150px; /* Adjusted log height for smaller screens */
+  }
+}

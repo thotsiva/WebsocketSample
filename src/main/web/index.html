@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebSocket Client</title>
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f4f4f4;
+      color: #666;
+      overflow: auto;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      box-sizing: border-box;
+      height: auto;
+    }
+
+    /* Tab Header */
+    .tab-header {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+
+    .tab-header .tab-button {
+      display: block;
+      padding: 8px 20px;
+      font-size: 0.9em;  /* Smaller font size for tab headers */
+      font-weight: 500;
+      cursor: pointer;
+      background-color: #e0e0e0;
+      border: 1px solid #ddd;
+      border-radius: 5px 5px 0 0;
+      margin-right: 5px;
+      transition: background-color 0.3s, border-color 0.3s;
+    }
+
+    .tab-header .tab-button:hover {
+      background-color: #d5d5d5;
+    }
+
+    .tab-header .tab-button.active {
+      background-color: #b0b0b0;
+      border-color: #888;
+      color: #333;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      font-size: 1em;
+      color: #666;
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      box-sizing: border-box;
+      height: 40px;
+      line-height: 40px;
+      vertical-align: middle;
+    }
+
+    .form-control:focus {
+      border-color: #ccc;
+      outline: none;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 0 10px;
+      font-size: 1em;
+      font-weight: 500;
+      text-align: center;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      box-sizing: border-box;
+      height: 40px;
+      line-height: 40px;
+      vertical-align: middle;
+      transition: background-color 0.3s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .btn-connect {
+      background-color: #80e27e; /* Lighter green */
+      color: #fff;
+      width: 120px;
+      font-size: 0.9em;
+      margin-left: 10px;
+      margin-top: 10px;
+    }
+
+    .btn-connect:hover {
+      background-color: #66cc66; /* Slightly darker when hovered */
+    }
+
+    .btn-connect:active {
+      background-color: #4CAF50;
+    }
+
+    .btn-send {
+      background-color: #66b3ff; /* Lighter blue */
+      color: #fff;
+      width: 120px;
+      padding: 10px 0;
+      font-size: 1em;
+      margin-left: 10px;
+      margin-top: 10px;
+    }
+
+    .btn-send:hover {
+      background-color: #3399ff; /* Slightly darker when hovered */
+    }
+
+    .btn-send:active {
+      background-color: #007bff;
+    }
+
+    .btn-receive {
+      background-color: #66b3ff; /* Lighter blue */
+      color: #fff;
+      width: 140px;
+      font-size: 0.8em; /* Smaller text size */
+      padding: 8px 0;   /* Adjust padding for smaller text */
+      margin-top: 10px;
+      margin-left: 10px;
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .btn-receive:hover {
+      background-color: #3399ff; /* Slightly darker when hovered */
+    }
+
+    .btn-receive:active {
+      background-color: #007bff;
+    }
+
+    .input-row {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    #ws-message {
+      flex: 1;
+      resize: vertical;
+      min-height: 100px;
+      max-height: 300px;
+      background-color: #f9f9f9;
+      color: #666;
+      border: 1px solid #ddd;
+      height: 40px;
+      line-height: 40px;
+      vertical-align: middle;
+    }
+
+    #ws-log, #receive-log {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95em;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid #ddd;
+      height: 200px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+
+    /* Placeholder text styling */
+    ::placeholder {
+      font-size: 0.85em;  /* Smaller font size for placeholders */
+      color: #aaa;  /* Light grey color for placeholder text */
+    }
+
+    /* Connected Status Indicator */
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: #4CAF50;
+    }
+
+    .status-indicator .status-dot {
+      width: 12px;
+      height: 12px;
+      background-color: #4CAF50;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        width: 100%;
+        padding: 15px;
+      }
+
+      .input-row {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .input-row .btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Tab Header -->
+  <div class="tab-header">
+    <button class="tab-button active" onclick="openTab(event, 'sendMessage')">Send Message</button>
+    <button class="tab-button" onclick="openTab(event, 'receiveMessage')">Receive Message</button>
+  </div>
+
+  <!-- Send Message Tab -->
+  <div id="sendMessage" class="tab-content active">
+    <h1 style="font-size: 1.5em; text-align: center;">WebSocket Client</h1> 
+
+    <!-- WebSocket Card -->
+    <div>
+      <div class="input-row">
+        <input type="text" id="ws-url" class="form-control" placeholder="Enter WebSocket URL with params" required>
+        <button id="connect-btn" class="btn btn-connect" type="button" onclick="connectWebSocket()">Connect</button>
+      </div>
+
+      <div class="status-indicator" id="ws-status">
+        <div class="status-dot" style="display: none;"></div>
+        <span>Waiting for connection...</span>
+      </div>
+
+      <div class="input-row">
+        <textarea id="ws-message" class="form-control" rows="4" placeholder="Enter your message here..."></textarea>
+        <button class="btn btn-send" type="button" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <h2 style="font-size: 1.2em; text-align: center;">Connection Logs</h2>
+      <div id="ws-log">Waiting for messages...</div>
+    </div>
+  </div>
+
+  <!-- Receive Message Tab -->
+  <div id="receiveMessage" class="tab-content">
+    <h1 style="font-size: 1.5em; text-align: center;">WebSocket Receiver</h1>
+
+    <div class="input-row">
+      <input type="text" id="receive-url" class="form-control" placeholder="Enter WebSocket URL to receive data">
+      <button id="start-receiving-btn" class="btn btn-receive" type="button" onclick="connectReceiveWebSocket()">Start Receiving</button>
+    </div>
+
+    <div class="status-indicator" id="receive-status">
+      <div class="status-dot" style="display: none;"></div>
+      <span>Waiting for connection...</span>
+    </div>
+
+    <div class="mt-4">
+      <h2 style="font-size: 1.2em; text-align: center;">Received Data</h2>
+      <div id="receive-log">Waiting for messages...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let socket;
+  let receiveSocket;
+
+  function openTab(event, tabName) {
+    const tabContent = document.querySelectorAll('.tab-content');
+    tabContent.forEach((tab) => tab.classList.remove('active'));
+
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach((button) => button.classList.remove('active'));
+
+    document.getElementById(tabName).classList.add('active');
+    event.currentTarget.classList.add('active');
+  }
+
+  function connectWebSocket() {
+    const url = document.getElementById('ws-url').value;
+    if (!url) {
+      alert('Please enter a WebSocket URL');
+      return;
+    }
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.close();
+    }
+
+    socket = new WebSocket(url);
+
+    socket.onopen = () => {
+      document.getElementById('ws-log').innerText = 'Connected to WebSocket!';
+      // Update the status indicator to show success
+      document.getElementById('ws-status').innerHTML = '<div class="status-dot"></div><span>Connected</span>';
+      document.querySelector('.status-dot').style.display = 'inline-block';
+    };
+
+    socket.onmessage = (event) => {
+      const log = document.getElementById('ws-log');
+      log.innerText += `\nReceived: ${event.data}`;
+    };
+
+    socket.onerror = (error) => {
+      document.getElementById('ws-log').innerText = `Error: ${error.message}`;
+    };
+
+    socket.onclose = () => {
+      document.getElementById('ws-log').innerText += '\nConnection closed.';
+      // Hide the status indicator when closed
+      document.getElementById('ws-status').innerHTML = '<div class="status-dot" style="background-color: red;"></div><span>Disconnected</span>';
+    };
+  }
+
+  function sendMessage() {
+    const message = document.getElementById('ws-message').value;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(message);
+      document.getElementById('ws-log').innerText += `\nSent: ${message}`;
+    } else {
+      alert('Please connect to WebSocket first.');
+    }
+  }
+
+  function connectReceiveWebSocket() {
+    const url = document.getElementById('receive-url').value;
+    if (!url) {
+      alert('Please enter a WebSocket URL');
+      return;
+    }
+
+    if (receiveSocket && receiveSocket.readyState === WebSocket.OPEN) {
+      receiveSocket.close();
+    }
+
+    receiveSocket = new WebSocket(url);
+
+    receiveSocket.onopen = () => {
+      document.getElementById('receive-log').innerText = 'Connected to WebSocket (Receiving)...';
+      // Update the status indicator to show success
+      document.getElementById('receive-status').innerHTML = '<div class="status-dot"></div><span>Connected</span>';
+      document.querySelector('#receive-status .status-dot').style.display = 'inline-block';
+    };
+
+    receiveSocket.onmessage = (event) => {
+      const log = document.getElementById('receive-log');
+      log.innerText += `\nReceived: ${event.data}`;
+    };
+
+    receiveSocket.onerror = (error) => {
+      document.getElementById('receive-log').innerText = `Error: ${error.message}`;
+    };
+
+    receiveSocket.onclose = () => {
+      document.getElementById('receive-log').innerText += '\nConnection closed.';
+      // Hide the status indicator when closed
+      document.getElementById('receive-status').innerHTML = '<div class="status-dot" style="background-color: red;"></div><span>Disconnected</span>';
+    };
+  }
+</script>
+
+</body>
+</html>

@@ -281,8 +281,8 @@
     <h1 style="font-size: 1.5em; text-align: center;">WebSocket Receiver</h1>
 
     <div class="input-row">
-      <input type="text" id="receive-url" class="form-control" placeholder="Enter WebSocket URL to receive data">
-      <button id="start-receiving-btn" class="btn btn-receive" type="button" onclick="connectReceiveWebSocket()">Start Receiving</button>
+      <input type="text" id="receive-url" class="form-control" placeholder="Enter WebSocket URL to receive from" required>
+      <button id="connect-receive-btn" class="btn btn-receive" type="button" onclick="connectReceiveWebSocket()">Connect</button>
     </div>
 
     <div class="status-indicator" id="receive-status">
@@ -291,25 +291,35 @@
     </div>
 
     <div class="mt-4">
-      <h2 style="font-size: 1.2em; text-align: center;">Received Data</h2>
+      <h2 style="font-size: 1.2em; text-align: center;">Received Messages</h2>
       <div id="receive-log">Waiting for messages...</div>
     </div>
   </div>
 </div>
 
 <script>
-  let socket;
-  let receiveSocket;
+  let sendSocket, receiveSocket, pingInterval;
 
-  function openTab(event, tabName) {
-    const tabContent = document.querySelectorAll('.tab-content');
-    tabContent.forEach((tab) => tab.classList.remove('active'));
-
+  function openTab(evt, tabName) {
     const tabButtons = document.querySelectorAll('.tab-button');
-    tabButtons.forEach((button) => button.classList.remove('active'));
+    const tabContents = document.querySelectorAll('.tab-content');
 
+    // Remove 'active' class from all buttons and contents
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(tab => tab.classList.remove('active'));
+
+    // Add 'active' class to the clicked button and the corresponding tab content
+    evt.currentTarget.classList.add('active');
     document.getElementById(tabName).classList.add('active');
-    event.currentTarget.classList.add('active');
+  }
+
+  function buildMessage() {
+    // Example of a simple message
+    return {
+      type: 'ping',
+      timestamp: Date.now(),
+      message: 'ping',
+    };
   }
 
   function connectWebSocket() {
@@ -319,43 +329,45 @@
       return;
     }
 
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.close();
+    if (sendSocket && sendSocket.readyState === WebSocket.OPEN) {
+      console.log('Already connected.');
+      return;
     }
 
-    socket = new WebSocket(url);
+    sendSocket = new WebSocket(url);
 
-    socket.onopen = () => {
-      document.getElementById('ws-log').innerText = 'Connected to WebSocket!';
-      // Update the status indicator to show success
+    sendSocket.onopen = () => {
       document.getElementById('ws-status').innerHTML = '<div class="status-dot"></div><span>Connected</span>';
-      document.querySelector('.status-dot').style.display = 'inline-block';
+      document.querySelector('#ws-status .status-dot').style.display = 'inline-block';
+      console.log('WebSocket connection opened for sending.');
+
+      // Enable sending message after connection is open
+      document.querySelector('.btn-send').disabled = false;
     };
 
-    socket.onmessage = (event) => {
-      const log = document.getElementById('ws-log');
-      log.innerText += `\nReceived: ${event.data}`;
+    sendSocket.onmessage = (event) => {
+      document.getElementById('ws-log').innerText = `Received: ${event.data}`;
     };
 
-    socket.onerror = (error) => {
+    sendSocket.onerror = (error) => {
       document.getElementById('ws-log').innerText = `Error: ${error.message}`;
     };
 
-    socket.onclose = () => {
-      document.getElementById('ws-log').innerText += '\nConnection closed.';
-      // Hide the status indicator when closed
+    sendSocket.onclose = () => {
       document.getElementById('ws-status').innerHTML = '<div class="status-dot" style="background-color: red;"></div><span>Disconnected</span>';
+      document.querySelector('#ws-status .status-dot').style.display = 'inline-block';
+      console.log('WebSocket connection closed.');
     };
   }
 
   function sendMessage() {
     const message = document.getElementById('ws-message').value;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(message);
-      document.getElementById('ws-log').innerText += `\nSent: ${message}`;
-    } else {
-      alert('Please connect to WebSocket first.');
+    if (!message || !sendSocket || sendSocket.readyState !== WebSocket.OPEN) {
+      alert('Connection is not open or message is empty');
+      return;
     }
+    sendSocket.send(message);
+    console.log('Sent message:', message);
   }
 
   function connectReceiveWebSocket() {
@@ -366,31 +378,44 @@
     }
 
     if (receiveSocket && receiveSocket.readyState === WebSocket.OPEN) {
-      receiveSocket.close();
+      console.log('Already connected to WebSocket for receiving.');
+      return;
     }
 
+    // Create a new WebSocket connection for receiving
     receiveSocket = new WebSocket(url);
 
     receiveSocket.onopen = () => {
       document.getElementById('receive-log').innerText = 'Connected to WebSocket (Receiving)...';
-      // Update the status indicator to show success
       document.getElementById('receive-status').innerHTML = '<div class="status-dot"></div><span>Connected</span>';
       document.querySelector('#receive-status .status-dot').style.display = 'inline-block';
+
+      // Periodic ping message
+      pingInterval = setInterval(() => {
+        if (receiveSocket && receiveSocket.readyState === WebSocket.OPEN) {
+          receiveSocket.send(JSON.stringify(buildMessage())); // Send the "ping" message to the server
+          console.log('Sent ping message to server...');
+        }
+      }, 30 * 1000); // 30 seconds
     };
 
     receiveSocket.onmessage = (event) => {
+      console.log('Received message: ', event.data); // Log the received message for debugging
       const log = document.getElementById('receive-log');
       log.innerText += `\nReceived: ${event.data}`;
+      log.scrollTop = log.scrollHeight; // Automatically scroll to the bottom when new data is added
     };
 
     receiveSocket.onerror = (error) => {
+      console.error('WebSocket Error: ', error);
       document.getElementById('receive-log').innerText = `Error: ${error.message}`;
     };
 
     receiveSocket.onclose = () => {
+      console.log('WebSocket connection closed.');
       document.getElementById('receive-log').innerText += '\nConnection closed.';
-      // Hide the status indicator when closed
       document.getElementById('receive-status').innerHTML = '<div class="status-dot" style="background-color: red;"></div><span>Disconnected</span>';
+      clearInterval(pingInterval); // Clear the ping interval
     };
   }
 </script>

@@ -35,11 +35,15 @@ jobs:
       - name: Run Maven Build and Tests
         run: mvn clean install
 
-      # Step 5: Run JaCoCo to generate code coverage report
+      # Step 5: Set environment variable to enforce coverage check on PRs
+      - name: Set environment variable for coverage check
+        run: echo "SKIP_COVERAGE_CHECK=false" >> $GITHUB_ENV
+
+      # Step 6: Run JaCoCo to generate code coverage report
       - name: Generate JaCoCo Coverage Report
         run: mvn jacoco:report
 
-      # Step 6: Check code coverage and enforce threshold
+      # Step 7: Enforce code coverage check
       - name: Enforce 80% Code Coverage
         run: |
           # Extract the coverage percentage from the JaCoCo report

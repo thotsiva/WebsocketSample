@@ -64,7 +64,7 @@ public class RedisBatchProcessingWithPipelining {
     // Method to process keys in batches using pipelining and convert the values to AgentDetails
     public static List<AgentDetails> processKeysWithPipelining(Jedis jedis, List<String> allKeys) {
         int batchSize = 200;
-        
+
         // Group keys into batches
         List<List<String>> batches = new ArrayList<>();
         for (int i = 0; i < allKeys.size(); i += batchSize) {
@@ -81,11 +81,12 @@ public class RedisBatchProcessingWithPipelining {
                         // Issue mget command for current batch
                         pipeline.mget(batch.toArray(new String[0]));
 
-                        // Execute the pipeline
-                        List<Response<String>> responses = pipeline.syncAndReturnAll();
+                        // Execute the pipeline and get the responses (List<Object>)
+                        List<Object> responses = pipeline.syncAndReturnAll();
 
                         // Process each response in the pipeline and apply the filters
                         return responses.stream()
+                                .map(response -> (Response<String>) response) // Safely cast to Response<String>
                                 .map(Response::get) // Get the value for each key
                                 .filter(Objects::nonNull) // Filter out null responses
                                 .map(value -> gson.fromJson(value, AgentDetails.class))  // Deserialize to AgentDetails

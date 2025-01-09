@@ -64,35 +64,36 @@ public class RedisBatchProcessingWithPipelining {
     // Method to process keys in batches using pipelining and convert the values to AgentDetails
     public static List<AgentDetails> processKeysWithPipelining(Jedis jedis, List<String> allKeys) {
         int batchSize = 200;
+        
+        // Group keys into batches
+        List<List<String>> batches = new ArrayList<>();
+        for (int i = 0; i < allKeys.size(); i += batchSize) {
+            batches.add(allKeys.subList(i, Math.min(i + batchSize, allKeys.size())));
+        }
 
-        // Create pipeline and process keys in functional style using streams
+        // Use flatMap and streams for functional processing
         try (Jedis jedisPipeline = jedis) {
             Pipeline pipeline = jedis.pipelined(); // Create a pipeline instance
 
-            // Split the keys into batches, and process each batch using mget() in a functional way
-            return allKeys.stream()
-                    .collect(Collectors.groupingBy(key -> allKeys.indexOf(key) / batchSize)) // Group keys into batches
-                    .values().stream() // Stream of batches
+            // Stream over batches and process the pipeline results
+            return batches.stream()  // Stream over batches
                     .flatMap(batch -> {
-                        // Add the mget commands for the current batch
-                        pipeline.mget(batch.toArray(new String[0])); 
-                        pipeline.sync(); // Execute the pipeline
+                        // Issue mget command for current batch
+                        pipeline.mget(batch.toArray(new String[0]));
 
-                        // Process the responses for each batch
-                        return batch.stream()
-                                .map(key -> pipeline.get(key)) // Get each key's value (Response<String>)
+                        // Execute the pipeline
+                        List<Response<String>> responses = pipeline.syncAndReturnAll();
+
+                        // Process each response in the pipeline and apply the filters
+                        return responses.stream()
+                                .map(Response::get) // Get the value for each key
                                 .filter(Objects::nonNull) // Filter out null responses
-                                .map(response -> response.get()) // Get the actual value from the Response<String>
-                                .filter(Objects::nonNull) // Ensure non-null response
-                                .map(value -> gson.fromJson(value, AgentDetails.class)) // Deserialize to AgentDetails
-                                .filter(agent -> {
-                                    // Inline the check directly here
-                                    return LocalDateTime.parse(agent.getLatestAliveTs(), DateTimeFormatter.ISO_DATE_TIME)
-                                            .isAfter(LocalDateTime.now().minusMinutes(1)); // Check if within the last minute
-                                }) // Filter based on alive time directly
-                                .collect(Collectors.toList()); // Collect the filtered agents
+                                .map(value -> gson.fromJson(value, AgentDetails.class))  // Deserialize to AgentDetails
+                                .filter(agent -> LocalDateTime.parse(agent.getLatestAliveTs(), DateTimeFormatter.ISO_DATE_TIME)
+                                        .isAfter(LocalDateTime.now().minusMinutes(1)))  // Filter agents that are alive within the last minute
+                                .collect(Collectors.toList());  // Collect the results as a list
                     })
-                    .collect(Collectors.toList()); // Collect all agents from all batches into one list
+                    .collect(Collectors.toList());  // Flatten the results from all batches
 
         } catch (Exception e) {
             e.printStackTrace(); // Handle errors (log or propagate as needed)

@@ -1,0 +1,177 @@
+import redis.clients.jedis.*;
+import io.reactivex.Single;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class RedisBatchProcessingWithPipelining {
+
+    public static void main(String[] args) {
+        // Set up the JedisPool with connection settings
+        JedisPoolConfig poolConfig = new JedisPoolConfig();
+        poolConfig.setMaxTotal(10); // Max total connections
+        poolConfig.setMaxIdle(5);   // Max idle connections
+        poolConfig.setMinIdle(1);   // Min idle connections
+
+        JedisPool jedisPool = new JedisPool(poolConfig, "localhost", 6379, 2000, "your-redis-password"); // Use correct Redis host and password
+
+        // Fetch all matching keys that start with "agentDetail" and their values in batches using Redis SCAN command and pipelining
+        processKeysInBatches(jedisPool, "agentDetail*")
+                .subscribe(
+                        agentDetailsList -> agentDetailsList.forEach(agent -> {
+                            System.out.println("Agent: " + agent.getAgentUserName());
+                        }),
+                        throwable -> System.err.println("Error: " + throwable.getMessage())
+                );
+    }
+
+    // Method to process keys in batches using Redis SCAN and pipelining
+    public static Single<List<AgentDetails>> processKeysInBatches(JedisPool jedisPool, String pattern) {
+        return Single.create(emitter -> {
+            try (Jedis jedis = jedisPool.getResource()) {
+                String cursor = ScanParams.SCAN_POINTER_START; // Use SCAN_POINTER_START for the initial cursor
+                List<String> allKeys = new ArrayList<>(); // List to store keys that match the pattern
+
+                // Set up the ScanParams with MATCH for SCAN command
+                ScanParams scanParams = new ScanParams().match(pattern).count(1000); // Scan all matching keys
+
+                // Scan through the Redis keys and collect all keys matching the pattern
+                do {
+                    ScanResult<String> scanResult = jedis.scan(cursor, scanParams);
+                    cursor = scanResult.getCursor(); // Get the updated cursor
+
+                    // Add the keys from the current batch to the list
+                    allKeys.addAll(scanResult.getResult());
+                } while (!cursor.equals(ScanParams.SCAN_POINTER_START)); // Continue scanning until cursor is "0"
+
+                // Now process the keys in batches of 200 using pipelining and convert to AgentDetails
+                List<AgentDetails> agentDetailsList = processKeysWithPipelining(jedis, allKeys);
+
+                // Emit the result as a Single
+                emitter.onSuccess(agentDetailsList);
+
+            } catch (Exception e) {
+                emitter.onError(e); // If there's an error, emit it
+            }
+        });
+    }
+
+    // Method to process keys in batches using pipelining and convert the values to AgentDetails
+    public static List<AgentDetails> processKeysWithPipelining(Jedis jedis, List<String> allKeys) {
+        int batchSize = 200;
+
+        try (Jedis jedisPipeline = jedis) {
+            Pipeline pipeline = jedis.pipelined(); // Create a pipeline instance
+
+            // Use flatMap to process all keys in batches in a functional manner
+            List<AgentDetails> agentDetailsList = allKeys.stream()
+                    .collect(Collectors.groupingBy(key -> allKeys.indexOf(key) / batchSize)) // Group by batches
+                    .values().stream() // Create a stream of batches
+                    .flatMap(batch -> {
+                        // Add MGET command to the pipeline for the current batch
+                        pipeline.mget(batch.toArray(new String[0]));
+                        pipeline.sync(); // Execute the pipeline and collect responses
+
+                        // Get the responses and process them
+                        return batch.stream()
+                                .map(key -> pipeline.get(key)) // Get each key's value
+                                .filter(Objects::nonNull) // Filter out nulls
+                                .map(value -> gson.fromJson(value, AgentDetails.class)) // Convert to AgentDetails
+                                .filter(agent -> isAliveForLessThanOneMinute(agent)) // Filter based on latestAliveTs
+                                .collect(Collectors.toList()); // Collect the result
+                    })
+                    .collect(Collectors.toList()); // Collect all batches into a single list
+
+            return agentDetailsList;
+
+        } catch (Exception e) {
+            e.printStackTrace(); // Handle errors (log or propagate as needed)
+        }
+
+        return Collections.emptyList(); // Return empty list in case of error
+    }
+
+    // Inline check to ensure latestAliveTs is within the last minute
+    private static boolean isAliveForLessThanOneMinute(AgentDetails agent) {
+        return LocalDateTime.parse(agent.getLatestAliveTs(), DateTimeFormatter.ISO_DATE_TIME)
+                .isAfter(LocalDateTime.now().minusMinutes(1)); // Check if within the last minute
+    }
+
+    // AgentDetails POJO class
+    public static class AgentDetails {
+        private String agentUserName;
+        private String agentIdentifier;
+        private Boolean agentStateReady;
+        private String agentStateNotReadyReason;
+        private List<String> assignedUserIds;
+        private String latestAliveTs;
+        private String latestAliveWebsocketId;
+        private List<String> webSocketDetails;
+
+        // Getters and Setters
+        public String getAgentUserName() {
+            return agentUserName;
+        }
+
+        public void setAgentUserName(String agentUserName) {
+            this.agentUserName = agentUserName;
+        }
+
+        public String getAgentIdentifier() {
+            return agentIdentifier;
+        }
+
+        public void setAgentIdentifier(String agentIdentifier) {
+            this.agentIdentifier = agentIdentifier;
+        }
+
+        public Boolean getAgentStateReady() {
+            return agentStateReady;
+        }
+
+        public void setAgentStateReady(Boolean agentStateReady) {
+            this.agentStateReady = agentStateReady;
+        }
+
+        public String getAgentStateNotReadyReason() {
+            return agentStateNotReadyReason;
+        }
+
+        public void setAgentStateNotReadyReason(String agentStateNotReadyReason) {
+            this.agentStateNotReadyReason = agentStateNotReadyReason;
+        }
+
+        public List<String> getAssignedUserIds() {
+            return assignedUserIds;
+        }
+
+        public void setAssignedUserIds(List<String> assignedUserIds) {
+            this.assignedUserIds = assignedUserIds;
+        }
+
+        public String getLatestAliveTs() {
+            return latestAliveTs;
+        }
+
+        public void setLatestAliveTs(String latestAliveTs) {
+            this.latestAliveTs = latestAliveTs;
+        }
+
+        public String getLatestAliveWebsocketId() {
+            return latestAliveWebsocketId;
+        }
+
+        public void setLatestAliveWebsocketId(String latestAliveWebsocketId) {
+            this.latestAliveWebsocketId = latestAliveWebsocketId;
+        }
+
+        public List<String> getWebSocketDetails() {
+            return webSocketDetails;
+        }
+
+        public void setWebSocketDetails(List<String> webSocketDetails) {
+            this.webSocketDetails = webSocketDetails;
+        }
+    }
+}

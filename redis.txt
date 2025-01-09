@@ -4,8 +4,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.google.gson.Gson;
 
 public class RedisBatchProcessingWithPipelining {
+
+    // Initialize the Gson object for parsing JSON strings
+    private static final Gson gson = new Gson();
 
     public static void main(String[] args) {
         // Set up the JedisPool with connection settings
@@ -61,29 +65,30 @@ public class RedisBatchProcessingWithPipelining {
     public static List<AgentDetails> processKeysWithPipelining(Jedis jedis, List<String> allKeys) {
         int batchSize = 200;
 
+        // Create pipeline and process keys in functional style using streams
         try (Jedis jedisPipeline = jedis) {
             Pipeline pipeline = jedis.pipelined(); // Create a pipeline instance
 
-            // Use flatMap to process all keys in batches in a functional manner
-            List<AgentDetails> agentDetailsList = allKeys.stream()
-                    .collect(Collectors.groupingBy(key -> allKeys.indexOf(key) / batchSize)) // Group by batches
-                    .values().stream() // Create a stream of batches
+            // Split the keys into batches, and process each batch using mget() in a functional way
+            return allKeys.stream()
+                    .collect(Collectors.groupingBy(key -> allKeys.indexOf(key) / batchSize)) // Group keys into batches
+                    .values().stream() // Stream of batches
                     .flatMap(batch -> {
-                        // Add MGET command to the pipeline for the current batch
-                        pipeline.mget(batch.toArray(new String[0]));
-                        pipeline.sync(); // Execute the pipeline and collect responses
+                        // Add the mget commands for the current batch
+                        pipeline.mget(batch.toArray(new String[0])); 
+                        pipeline.sync(); // Execute the pipeline
 
-                        // Get the responses and process them
+                        // Process the responses for each batch
                         return batch.stream()
-                                .map(key -> pipeline.get(key)) // Get each key's value
-                                .filter(Objects::nonNull) // Filter out nulls
-                                .map(value -> gson.fromJson(value, AgentDetails.class)) // Convert to AgentDetails
-                                .filter(agent -> isAliveForLessThanOneMinute(agent)) // Filter based on latestAliveTs
-                                .collect(Collectors.toList()); // Collect the result
+                                .map(key -> pipeline.get(key)) // Get each key's value (Response<String>)
+                                .filter(Objects::nonNull) // Filter out null responses
+                                .map(response -> response.get()) // Get the actual value from the Response<String>
+                                .filter(Objects::nonNull) // Ensure non-null response
+                                .map(value -> gson.fromJson(value, AgentDetails.class)) // Deserialize to AgentDetails
+                                .filter(RedisBatchProcessingWithPipelining::isAliveForLessThanOneMinute) // Filter based on alive time
+                                .collect(Collectors.toList()); // Collect the filtered agents
                     })
-                    .collect(Collectors.toList()); // Collect all batches into a single list
-
-            return agentDetailsList;
+                    .collect(Collectors.toList()); // Collect all agents from all batches into one list
 
         } catch (Exception e) {
             e.printStackTrace(); // Handle errors (log or propagate as needed)

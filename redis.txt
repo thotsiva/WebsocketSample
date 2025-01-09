@@ -85,7 +85,11 @@ public class RedisBatchProcessingWithPipelining {
                                 .map(response -> response.get()) // Get the actual value from the Response<String>
                                 .filter(Objects::nonNull) // Ensure non-null response
                                 .map(value -> gson.fromJson(value, AgentDetails.class)) // Deserialize to AgentDetails
-                                .filter(RedisBatchProcessingWithPipelining::isAliveForLessThanOneMinute) // Filter based on alive time
+                                .filter(agent -> {
+                                    // Inline the check directly here
+                                    return LocalDateTime.parse(agent.getLatestAliveTs(), DateTimeFormatter.ISO_DATE_TIME)
+                                            .isAfter(LocalDateTime.now().minusMinutes(1)); // Check if within the last minute
+                                }) // Filter based on alive time directly
                                 .collect(Collectors.toList()); // Collect the filtered agents
                     })
                     .collect(Collectors.toList()); // Collect all agents from all batches into one list
@@ -95,12 +99,6 @@ public class RedisBatchProcessingWithPipelining {
         }
 
         return Collections.emptyList(); // Return empty list in case of error
-    }
-
-    // Inline check to ensure latestAliveTs is within the last minute
-    private static boolean isAliveForLessThanOneMinute(AgentDetails agent) {
-        return LocalDateTime.parse(agent.getLatestAliveTs(), DateTimeFormatter.ISO_DATE_TIME)
-                .isAfter(LocalDateTime.now().minusMinutes(1)); // Check if within the last minute
     }
 
     // AgentDetails POJO class

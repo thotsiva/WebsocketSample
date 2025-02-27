@@ -1,0 +1,15 @@
+Hi Swetha,
+
+Good Evening.
+
+I hope you're doing well.
+
+We have observed a scenario with the Agent Alive Scheduler that I'd like to bring to your attention. When retrieving agents with expired Agent Alive status and in LoggedIn status, as per the current process, we update the agent status to "System Issues" and reassign all associated user IDs under that agent.
+
+However, if there are multiple user IDs assigned, the mergeDelayError triggers the reassign API simultaneously, which can sometimes result in concurrency issues.
+
+To resolve this, we have two possible options:
+
+Watcher Service Fix: We can change the mergeDelayError to ConcatArrayDelayError (observable), along with a few code modifications.
+Core Router Fix: We could create a new API that accepts multiple user IDs and performs the reassignments accordingly, similar to the reassignAllConversations() method in the commonUtil.java file.
+We would appreciate your input on the above options. Please let us know if you'd like to connect and discuss further over a call.

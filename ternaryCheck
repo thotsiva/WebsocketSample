@@ -1,0 +1,77 @@
+public String generateUserAgentInteractionIdQuery(String updateTs, Integer limit) {
+    // Constants
+    final String SELECT_DETAILS_FROM = "SELECT details FROM ";
+    final String WHERE = " WHERE ";
+    final String DOCTYPE = "doctype";
+    final String QUERY_EQUALS = " = ";
+    final String QUERY_GREATER_THAN_EQUALS = " >= ";
+    final String ORDER_BY = " ORDER BY ";
+    final String LIMIT = " LIMIT ";
+    final String CCP_NOT_YET_ASSIGNED = "CCP_NOT_YET_ASSIGNED";
+    final String CCP_ASSIGNED_AWAITING_CCP_UI_ACK = "CCP_ASSIGNED_AWAITING_CCP_UI_ACK";
+    final String CONVERSATION_STATUS = "conversation_status";
+    final String INIT_CHAT_ACK_ENABLED = "initChatAckEnabled";
+    final String WAIT_TIME_CHECK_ENABLED = "waitTimeCheckEnabled";
+    final String QUOTE = "\"";
+    final String OPENSQUAREBRAKET = "[";
+    final String CLOSESQUAREBRACKET = "]";
+    final String COMMA = ",";
+
+    // Start building the query
+    StringBuilder query = new StringBuilder()
+        .append(SELECT_DETAILS_FROM)
+        .append(connection.getBucketName())
+        .append(WHERE)
+        .append(DOCTYPE)
+        .append(QUERY_EQUALS)
+        .append(QUOTE)
+        .append(DOCTYPE)
+        .append(QUOTE)
+        .append(AND)
+        .append(UPDATETS)
+        .append(QUERY_GREATER_THAN_EQUALS)
+        .append(QUOTE)
+        .append(updateTs)
+        .append(QUOTE);
+
+    // Using ternary operator to handle the conversation status conditions
+    query.append(initChatAckEnabled && waitTimeCheckEnabled ? 
+                 (query.append(AND)
+                       .append(CONVERSATION_STATUS)
+                       .append(IN)
+                       .append(OPENSQUAREBRAKET)
+                       .append(QUOTE)
+                       .append(CCP_NOT_YET_ASSIGNED)
+                       .append(QUOTE)
+                       .append(COMMA)
+                       .append(QUOTE)
+                       .append(CCP_ASSIGNED_AWAITING_CCP_UI_ACK)
+                       .append(QUOTE)
+                       .append(CLOSESQUAREBRACKET),
+                  "") :
+                 
+                 (initChatAckEnabled && !waitTimeCheckEnabled ? 
+                  query.append(AND)
+                       .append(CONVERSATION_STATUS)
+                       .append(QUERY_EQUALS)
+                       .append(QUOTE)
+                       .append(CCP_ASSIGNED_AWAITING_CCP_UI_ACK)
+                       .append(QUOTE) : 
+                 
+                 (!initChatAckEnabled && waitTimeCheckEnabled ? 
+                  query.append(AND)
+                       .append(CONVERSATION_STATUS)
+                       .append(QUERY_EQUALS)
+                       .append(QUOTE)
+                       .append(CCP_NOT_YET_ASSIGNED)
+                       .append(QUOTE) : 
+                 "")));
+
+    // Finalize query with order and limit
+    query.append(ORDER_BY)
+         .append(UPDATETS)
+         .append(LIMIT)
+         .append(limit);
+
+    return query.toString();
+}

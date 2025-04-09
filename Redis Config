@@ -1,0 +1,233 @@
+JedisPoolConfig Properties
+setMaxTotal(int maxTotal)
+
+Description: Sets the maximum number of total connections (across all clients) that the pool can hold. When the pool is at its maximum size, new connections will be blocked until one becomes available.
+
+Use Case: Set this value according to the load and the number of simultaneous connections your application will require.
+
+Example: jedisPoolConfig.setMaxTotal(128);
+
+setMaxIdle(int maxIdle)
+
+Description: Sets the maximum number of idle connections to keep in the pool. This can help reduce the overhead of creating new connections and improve performance when traffic is low.
+
+Use Case: Set this to control how many idle connections you want to maintain. Too few might lead to delays when connections are needed, while too many might waste resources.
+
+Example: jedisPoolConfig.setMaxIdle(64);
+
+setMinIdle(int minIdle)
+
+Description: Sets the minimum number of idle connections that should be kept in the pool. If the number of idle connections falls below this number, the pool will create new connections to meet this minimum.
+
+Use Case: Ensures that a minimum number of idle connections are always available.
+
+Example: jedisPoolConfig.setMinIdle(16);
+
+setMaxWaitMillis(long maxWaitMillis)
+
+Description: Sets the maximum amount of time (in milliseconds) the client will wait for a connection from the pool before throwing an exception.
+
+Use Case: Helps prevent hanging requests when connections cannot be obtained. This is useful in environments with high traffic where connections are exhausted.
+
+Example: jedisPoolConfig.setMaxWaitMillis(5000); (Wait for 5 seconds before throwing an exception.)
+
+setTestOnBorrow(boolean testOnBorrow)
+
+Description: Determines whether a connection should be validated before being borrowed from the pool. When true, it will check whether the connection is valid before returning it.
+
+Use Case: Useful if you want to avoid borrowing a potentially broken connection.
+
+Example: jedisPoolConfig.setTestOnBorrow(true);
+
+setTestOnReturn(boolean testOnReturn)
+
+Description: Determines whether a connection should be validated before being returned to the pool.
+
+Use Case: Helps ensure that connections returned to the pool are still valid.
+
+Example: jedisPoolConfig.setTestOnReturn(true);
+
+setTestWhileIdle(boolean testWhileIdle)
+
+Description: Determines whether idle connections should be tested periodically. This helps to ensure that idle connections are still valid.
+
+Use Case: Useful for environments where connections may be closed or become stale while idle.
+
+Example: jedisPoolConfig.setTestWhileIdle(true);
+
+setMinEvictableIdleTimeMillis(long minEvictableIdleTimeMillis)
+
+Description: Sets the minimum amount of time a connection must be idle before it is eligible for eviction. This value can help control when to remove idle connections that are no longer needed.
+
+Use Case: Helps to manage memory and resources by removing idle connections that have been unused for a certain amount of time.
+
+Example: jedisPoolConfig.setMinEvictableIdleTimeMillis(60000); (Connections older than 1 minute are considered for eviction.)
+
+setTimeBetweenEvictionRunsMillis(long timeBetweenEvictionRunsMillis)
+
+Description: Sets the time (in milliseconds) between eviction runs. During each run, idle connections are validated, and expired ones are removed from the pool.
+
+Use Case: Set this for periodic cleanups of idle connections to prevent memory waste.
+
+Example: jedisPoolConfig.setTimeBetweenEvictionRunsMillis(30000); (Eviction runs every 30 seconds.)
+
+setNumTestsPerEvictionRun(int numTestsPerEvictionRun)
+
+Description: Sets the number of connections to test during each eviction run.
+
+Use Case: Controls how many connections will be tested for validity during an eviction run. A higher number means a more thorough check, but it can impact performance.
+
+Example: jedisPoolConfig.setNumTestsPerEvictionRun(10);
+
+setBlockWhenExhausted(boolean blockWhenExhausted)
+
+Description: Specifies whether the pool should block when all connections are exhausted. If true, it will block until a connection is available; otherwise, it will throw an exception.
+
+Use Case: If you want to ensure that your application doesn’t fail when connections are exhausted, you can set this to true.
+
+Example: jedisPoolConfig.setBlockWhenExhausted(true);
+
+setMaxIdlePerShard(int maxIdlePerShard)
+
+Description: Sets the maximum number of idle connections per shard in case you're using Redis in a sharded setup (cluster).
+
+Use Case: This is useful when working with Redis clusters.
+
+Example: jedisPoolConfig.setMaxIdlePerShard(10);
+
+setMaxTotalPerShard(int maxTotalPerShard)
+
+Description: Sets the maximum total number of connections per shard.
+
+Use Case: Also used in Redis sharded setups (clusters), this helps you limit the number of connections per shard.
+
+Example: jedisPoolConfig.setMaxTotalPerShard(20);
+
+setLifo(boolean lifo)
+
+Description: When set to true, the pool will use a Last In First Out (LIFO) order to return connections. By default, it’s false (FIFO).
+
+Use Case: You can set this to true to optimize the connection pool performance in scenarios where recently used connections should be returned first.
+
+Example: jedisPoolConfig.setLifo(true);
+
+Example of Configuring JedisPoolConfig
+Here’s a basic example that configures all these properties:
+
+java
+Copy
+JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
+jedisPoolConfig.setMaxTotal(128); // Max total connections
+jedisPoolConfig.setMaxIdle(64); // Max idle connections
+jedisPoolConfig.setMinIdle(16); // Min idle connections
+jedisPoolConfig.setMaxWaitMillis(5000); // Max wait time for a connection
+jedisPoolConfig.setTestOnBorrow(true); // Test on borrow
+jedisPoolConfig.setTestOnReturn(true); // Test on return
+jedisPoolConfig.setTestWhileIdle(true); // Test while idle
+jedisPoolConfig.setMinEvictableIdleTimeMillis(60000); // Min evictable idle time
+jedisPoolConfig.setTimeBetweenEvictionRunsMillis(30000); // Time between eviction runs
+jedisPoolConfig.setNumTestsPerEvictionRun(10); // Number of tests per eviction run
+jedisPoolConfig.setBlockWhenExhausted(true); // Block when exhausted
+jedisPoolConfig.setLifo(true); // Use LIFO ordering
+
+
+
+
+
+
+
+To ensure that at least one connection is up and running at all times in your Jedis connection pool and avoid the "wakeup time" of Redis (i.e., preventing the need to establish a new connection after an idle period), you can configure your Jedis connection pool in such a way that it maintains active connections and keeps the Redis connection alive.
+
+Here are a few strategies you can employ:
+
+1. Keep Minimum Idle Connections
+You can set the minimum idle connections (setMinIdle) to a positive number, ensuring that there are always idle connections available in the pool.
+
+By ensuring there are idle connections, you will avoid situations where your application has to wait for a new connection to be established.
+
+java
+Copy
+jedisPoolConfig.setMinIdle(1);  // Keep at least 1 idle connection available at all times
+2. Set TestWhileIdle and TestOnBorrow to true
+testWhileIdle: This ensures that idle connections are checked periodically for validity. If an idle connection becomes invalid (e.g., due to a network failure), it will be removed from the pool, and the pool will try to maintain a healthy connection.
+
+testOnBorrow: This ensures that before a connection is borrowed from the pool, it is validated. This can prevent invalid or stale connections from being used.
+
+java
+Copy
+jedisPoolConfig.setTestWhileIdle(true); // Test idle connections periodically
+jedisPoolConfig.setTestOnBorrow(true);  // Test the connection before borrowing it
+3. Set MinEvictableIdleTimeMillis and TimeBetweenEvictionRunsMillis
+If you want to ensure that idle connections are periodically checked and evicted if needed, you can set:
+
+minEvictableIdleTimeMillis: This controls the minimum amount of time that a connection can remain idle before it is eligible for eviction.
+
+timeBetweenEvictionRunsMillis: This controls the interval (in milliseconds) between each eviction run (where idle connections are checked and evicted if necessary).
+
+Setting these properties ensures that your pool continuously checks for idle, expired, or unhealthy connections.
+
+java
+Copy
+jedisPoolConfig.setMinEvictableIdleTimeMillis(300000);  // Idle connections will be considered for eviction after 5 minutes
+jedisPoolConfig.setTimeBetweenEvictionRunsMillis(60000); // Run eviction process every minute
+4. Leverage BlockWhenExhausted
+To avoid blocking your application when all connections are exhausted, set blockWhenExhausted to true. This will ensure that your application waits for a connection rather than throwing an exception, providing some "grace" in cases where there are no available connections.
+
+java
+Copy
+jedisPoolConfig.setBlockWhenExhausted(true);  // Wait for a connection instead of throwing an exception when exhausted
+5. Use a Background Thread to Keep the Pool Alive
+If you want to ensure that there is at least one active connection at all times, you can consider using a background thread to periodically borrow and return a connection. This would ensure that the pool keeps a connection "alive" without ever becoming idle, but it may have some performance overhead.
+
+Here's a simple approach:
+
+Periodically borrow a connection from the pool (e.g., every minute) to ensure there is always an active connection.
+
+Return the connection back to the pool after use (just to keep it active).
+
+java
+Copy
+// Example of keeping the connection alive in the background (just a rough idea)
+new Thread(() -> {
+    while (true) {
+        try (Jedis jedis = jedisPool.getResource()) {
+            // Optionally do some lightweight operation like pinging Redis to ensure the connection stays alive
+            jedis.ping();  // Simple ping to ensure the connection is alive
+            Thread.sleep(60000);  // Sleep for a minute before next ping
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}).start();
+6. Use JedisPooled (Jedis 4.x and later) for Automatic Management
+If you are using Jedis 4.x or later, the JedisPooled class manages connection pooling more efficiently and automatically than older versions. It simplifies connection management, and the connections are checked and reused intelligently without manual intervention.
+
+java
+Copy
+JedisPooled jedis = new JedisPooled("localhost", 6379);
+// Use JedisPooled to manage connections automatically without needing to manually configure pool
+Summary Configuration for Always-Running Connection
+Here's an example configuration that focuses on maintaining at least one active connection at all times:
+
+java
+Copy
+JedisPoolConfig jedisPoolConfig = new JedisPoolConfig();
+jedisPoolConfig.setMaxTotal(128);        // Max total connections in the pool
+jedisPoolConfig.setMaxIdle(64);          // Max idle connections
+jedisPoolConfig.setMinIdle(1);           // Ensure at least 1 idle connection at all times
+jedisPoolConfig.setMaxWaitMillis(5000);  // Max wait time for a connection
+jedisPoolConfig.setTestOnBorrow(true);   // Test connection before borrowing
+jedisPoolConfig.setTestWhileIdle(true);  // Periodically check idle connections
+jedisPoolConfig.setMinEvictableIdleTimeMillis(300000);  // Evict idle connections after 5 minutes
+jedisPoolConfig.setTimeBetweenEvictionRunsMillis(60000); // Run eviction every minute
+jedisPoolConfig.setBlockWhenExhausted(true); // Wait for a connection when exhausted
+Key Takeaways:
+Setting minIdle and testWhileIdle ensures there’s always an available and healthy connection.
+
+Eviction settings (minEvictableIdleTimeMillis, timeBetweenEvictionRunsMillis) ensure idle connections don’t stay too long.
+
+A background thread or periodic ping can be used to keep connections alive if needed.
+
+Always ensure blockWhenExhausted is true if you want to avoid connection issues when the pool is exhausted.
+
+These settings, combined with the above strategies, should ensure that your Jedis pool has at least one connection up and running at all times.

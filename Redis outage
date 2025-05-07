@@ -1,0 +1,12 @@
+Subject: Redis Outage Analysis – May 2 and April 16
+
+Hi Ram, Good Evening.
+
+May 2 Redis Outage:
+I reviewed the Agent Alive Watcher logs for the Redis outage that occurred from May 2, 11 PM to May 3, 4 AM. As per our BAU logic, only a few agents were flagged and moved to System Issues by the Watcher. I cross-checked with some agents and discussed the observations with Vaibhav to ensure alignment. Based on this review, we did not observe any significant increase in system issues related to the Watcher Agent Alive scheduler. I’ll attach the relevant logs to this analysis task for your reference.
+
+April 16 Redis Outage:
+While reviewing the April 16 outage, I noticed some inconsistencies in Agent Alive updates. Given the frequent up and down status of the Redis instances, there may have been some replication issues, which led the Watcher to flag certain records as system issues. I’ll investigate this further and share accurate statistics by tomorrow. I will also cross-check the findings with Shivam.
+
+Thank you.
+

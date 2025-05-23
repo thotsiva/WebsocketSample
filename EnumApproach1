@@ -1,0 +1,32 @@
+@Getter
+@RequiredArgsConstructor
+public enum CoBrandWeight {
+    RED("20", "Red"),
+    BRITISHAIRWAYS("20", "British Airways"),
+    HARRODS("20", "Harrods"),
+    BMWMINI("20", "BMW Mini"),
+    DEFAULT("0", "Default");
+
+    private final String value;
+    private final String displayName;
+
+    public static Optional<CoBrandWeight> fromDisplayName(String name) {
+        return Arrays.stream(values())
+                     .filter(e -> e.displayName.equalsIgnoreCase(name))
+                     .findFirst();
+    }
+}
+
+
+
+public int calculateCoBrandWeightage(List<String> productTypes) {
+    if (CollectionUtils.isEmpty(productTypes)) {
+        return 0;
+    }
+
+    return productTypes.stream()
+        .map(CoBrandWeight::fromDisplayName)
+        .filter(Optional::isPresent)
+        .mapToInt(opt -> Integer.parseInt(opt.get().getValue()))
+        .sum();
+}

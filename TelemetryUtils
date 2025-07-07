@@ -1,0 +1,82 @@
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+
+import java.util.Map;
+
+public class TelemetryUtils {
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("your-service-name");
+
+    /**
+     * Start a new span with an optional parent.
+     */
+    public static Span startSpan(String spanName, Span parentSpan) {
+        if (parentSpan != null) {
+            return tracer.spanBuilder(spanName)
+                         .setParent(Context.current().with(parentSpan))
+                         .setSpanKind(SpanKind.INTERNAL)
+                         .startSpan();
+        } else {
+            return tracer.spanBuilder(spanName)
+                         .setSpanKind(SpanKind.INTERNAL)
+                         .startSpan();
+        }
+    }
+
+    /**
+     * Start a new span and make it current (returns Scope).
+     */
+    public static Scope makeCurrent(Span span) {
+        return span.makeCurrent();
+    }
+
+    /**
+     * Add a simple event with a name to the span.
+     */
+    public static void addEvent(Span span, String eventName) {
+        if (span != null && eventName != null) {
+            span.addEvent(eventName);
+        }
+    }
+
+    /**
+     * Add an event with key-value attributes.
+     */
+    public static void addEvent(Span span, String eventName, Map<String, String> attributes) {
+        if (span != null && eventName != null && attributes != null) {
+            Attributes attr = Attributes.of(
+                attributes.entrySet().stream()
+                          .map(e -> AttributeKey.stringKey(e.getKey()))
+                          .toArray(AttributeKey[]::new),
+                attributes.values().toArray(String[]::new)
+            );
+            span.addEvent(eventName, attr);
+        }
+    }
+
+    /**
+     * End the span safely.
+     */
+    public static void endSpan(Span span) {
+        if (span != null) {
+            span.end();
+        }
+    }
+
+    /**
+     * Record exception and set error status on the span.
+     */
+    public static void recordException(Span span, Throwable throwable) {
+        if (span != null && throwable != null) {
+            span.recordException(throwable);
+            span.setStatus(StatusCode.ERROR, throwable.getMessage());
+        }
+    }
+}

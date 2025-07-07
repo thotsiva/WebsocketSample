@@ -1,0 +1,97 @@
+1. CCP Metrics Dashboards & Event Logging
+Action: Engage with the Console Team to review and understand the CCP (Contact Control Panel) Metrics dashboards.
+
+Objective:
+
+Understand how call metrics, agent states, and session events are logged.
+
+Clarify how event types (e.g., ContactConnected, ContactEnded, AgentStateChange) are structured and captured.
+
+Confirm how these metrics are visualized in the dashboards (Grafana/Splunk/QuickSight).
+
+Artifacts: Capture relevant dashboard links and exportable metrics structure for reference.
+
+2. Bot Reporting (Sibish / Tiru)
+Action: Consult with Sibish or Tiru to get detailed documentation or query templates related to bot interactions and reporting.
+
+Objective:
+
+Understand the data flow from bot platforms (Lex/Dialogflow/custom) to the data warehouse.
+
+Identify metrics such as BotInvocations, FallbackRate, IntentSuccessRate, and session durations.
+
+Clarify how these are reported and if session stitching is required.
+
+3. Right Now Dashboard Analysis
+Action: Review the Right Now dashboard's business and functional requirements.
+
+Objective:
+
+Identify current KPIs being tracked (e.g., live agent availability, active sessions, queue depth).
+
+Map each widget to its data source (e.g., AWS Connect streams, internal APIs, event logs).
+
+Assess refresh frequency and update mechanisms (e.g., scheduled jobs, streaming updates).
+
+4. CDART Framework & Onboarding
+Action: Schedule a knowledge-sharing session with the CDART Team.
+
+Objective:
+
+Gain insights into the data ingestion and transformation framework used by CDART.
+
+Understand how source data (S3/Kinesis/Kafka) is processed and transformed for reporting.
+
+Review any onboarding documentation for new datasets or reporting modules.
+
+Output: Document the pipeline stages, supported data models, and governance requirements.
+
+5. Real-time vs. Near-real-time Event Classification
+Action: Analyze key events captured in the platform and classify them based on latency and availability.
+
+Objective:
+
+Define thresholds for what qualifies as real-time (e.g., <5s delay) vs near-real-time (e.g., 1–5 min delay).
+
+Validate event capture frequency and propagation delays in Splunk/Kafka/S3 ingestion layers.
+
+Flag high-latency sources or transformations.
+
+6. Splunk Report Insights (Steven Park)
+Action: Collaborate with Steven Park to get a walkthrough of Splunk dashboards and journey-level tracking.
+
+Objective:
+
+Understand existing Splunk searches and how they’re used to trace customer/agent journeys.
+
+Identify fields used for correlation (e.g., ContactID, SessionID, UserID).
+
+Check if reports include time-series trends, error patterns, or alerting thresholds.
+
+Explore how Splunk is integrated with alerting (VictorOps/PagerDuty) and other observability tools.
+
+7. Documentation in Confluence
+Action: Create a structured Confluence page to consolidate findings.
+
+Structure:
+
+Overview of Reporting Ecosystem
+
+Source Systems & Event Pipelines
+
+Dashboard and Reporting Tools Overview
+
+Stakeholder Contacts & Ownership
+
+Open Gaps & Recommendations
+
+8. Transcript Report Gap Analysis
+Action: Continue in-progress gap analysis for the Transcript Report.
+
+Objective:
+
+Compare current transcript fields vs. expected fields (e.g., sentiment score, interruptions, silence duration).
+
+Identify missing metadata (e.g., timestamps, speaker labels, transcription confidence).
+
+Recommend enhancements in transcription pipeline (e.g., switching STT engine, adding post-processing).

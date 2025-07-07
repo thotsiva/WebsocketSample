@@ -1,0 +1,30 @@
+MDC stands for Mapped Diagnostic Context.
+
+It's a feature provided by logging frameworks like SLF4J, Logback, and Log4j that lets you attach per-thread contextual information (like user ID, request ID, trace ID) to your logs automatically.
+
+import org.slf4j.MDC;
+
+public void processRequest(String requestId) {
+    MDC.put("requestId", requestId);
+    log.info("Processing started");
+    MDC.clear(); // Always clear after use (especially in thread pools)
+}
+
+Why MDC doesn’t work well in Vert.x (or async systems)
+MDC uses ThreadLocal under the hood. That means it stores context per thread.
+
+But Vert.x is:
+
+Asynchronous
+
+Non-blocking
+
+Runs code on event loop threads, which may change per operation
+
+So MDC context can get lost or leak between requests unless you carefully manage it (which is tricky and error-prone in Vert.x).
+
+
+
+Vert.x is non-blocking and uses an event loop — so thread-local storage (like SLF4J's MDC) is not reliable unless explicitly managed per handler (which is brittle and not recommended).
+
+Not safe across event-loop threads

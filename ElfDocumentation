@@ -1,0 +1,158 @@
+Roadmap: Migration from Splunk to ELF via OpenTelemetry
+Overview
+Currently, all application logs are being published to Splunk, which serves as our primary log source. Dashboards have been built around these logs using Splunk queries, regular expressions, and various parsing strategies. However, due to the planned decommissioning of Splunk, we are migrating to an OpenTelemetry-based solution that will publish logs to ELF (Enterprise Logging Framework) or other observability targets.
+
+This migration will be executed in a phased approach to ensure backward compatibility and minimal disruption.
+
+Problem Statement
+We need to transition from Splunk to ELF without losing visibility or log fidelity. The new log stream must:
+
+Maintain log structure and fields as currently used in Splunk
+
+Be searchable and filterable to retain existing dashboard capabilities
+
+Support backward compatibility during migration
+
+Align with OpenTelemetry standards for traceability and observability
+
+Migration Plan
+Phase 1: Initial Migration to ELF
+Objective: Redirect logs from Splunk to ELF while preserving the current log format and semantics.
+
+Requirements:
+
+Ensure logs remain structured and queryable (JSON format preferred)
+
+Maintain consistency with existing Splunk logs
+
+Validate ELF indexing and searchability using OpenTelemetry-compatible log formats
+
+Considerations:
+
+Use structured logging standards (e.g., log level, timestamp, service name, trace ID)
+
+Support backward compatibility where both Splunk and ELF may coexist temporarily
+
+Phase 2: Decommissioning Splunk Integration
+Once ELF is validated and dashboards replicated, we will disable Splunk log publishing.
+
+This includes:
+
+Removing log4j or logback appenders related to Splunk
+
+Disabling any intermediate forwarders or agents configured for Splunk
+
+Post this phase, ELF becomes the sole log aggregation and monitoring system.
+
+Phase 3: OpenTelemetry Enhancements & ELF Optimization
+Begin discovery spikes for deeper ELF enhancements across:
+
+Platform-level services
+
+Orchestration components
+
+Amex internal projects (e.g., AskAmex, CMM)
+
+Focus areas:
+
+Improved span and trace correlation
+
+Event-based logging for better diagnostics
+
+Identifying performance bottlenecks via trace data
+
+Phase 4: Full ELF Adoption
+Complete migration to ELF with 100% logging, tracing, and dashboarding support
+
+Integrate ELF into CI/CD pipelines, alerting, and incident response
+
+Deprecate legacy tools/configs tied to Splunk
+
+Validated Approaches
+Approach 1: Minimal Intrusion Using Existing Codebase
+Method: Extend current code with a utility class wrapping the AMEX Logger. Introduce spans per log where needed.
+
+Details:
+
+A centralized utility is created to abstract log creation
+
+Each log call creates a span with contextual information
+
+Validated with endpoints like reassignConversation to ensure flow integrity
+
+Status: Logs successfully published to ELF; span/trace mappings under refinement
+
+Pros:
+
+Minimal code changes
+
+Quick rollout and testability
+
+Cons:
+
+Span and trace mappings require additional effort to be fully OpenTelemetry-compliant
+
+Approach 2: OpenTelemetry Utility Integration
+Method: Use the standardized OpenTelemetry utility JAR adopted by other teams
+
+Details:
+
+Define a parentSpan in the HttpRouter or request entry point
+
+Subsequent components (e.g., Validator, Handler, Helper) create child spans or custom events
+
+Enables:
+
+Full trace visualization
+
+Performance profiling of each block
+
+Rich context propagation across services
+
+Pros:
+
+Fully aligns with OpenTelemetry specification
+
+Enables advanced observability (latency tracking, request flow analysis)
+
+Cons:
+
+Requires more extensive code changes
+
+Additional overhead in onboarding teams and updating legacy code paths
+
+Technical Concepts
+Span
+A span represents a single operation within a trace. It includes metadata like operation name, start/end time, and tags (attributes). Spans can be nested, forming a tree structure that models the request's journey.
+
+Trace
+A trace is a collection of spans that represent the entire lifecycle of a request across services and components. It enables end-to-end visibility into request performance and failures.
+
+Event
+Events are time-stamped annotations within a span that represent specific log points, exceptions, or milestones. Events help correlate application logs with distributed traces.
+
+Example Span Hierarchy
+mathematica
+Copy
+Edit
+Trace: "GET /user/profile"
+|
+|-- Span: HttpRouter.handleRequest
+|     |
+|     |-- Span: Validator.validateUser
+|     |-- Span: Handler.fetchUserProfile
+|     |-- Span: Helper.transformData
+Next Steps
+Finalize the preferred approach based on ongoing validation
+
+Ensure logging utility supports:
+
+Backward-compatible formats
+
+Span/trace creation and propagation
+
+Start migration by priority (high-traffic services first)
+
+Develop migration guide and rollout checklist
+
+Monitor post-migration logs for consistency and gaps

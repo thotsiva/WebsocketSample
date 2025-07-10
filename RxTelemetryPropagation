@@ -1,0 +1,63 @@
+package your.package.telemetry;
+
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.reactivex.*;
+import io.reactivex.plugins.RxJavaPlugins;
+import org.reactivestreams.Publisher;
+
+public class RxTelemetryPropagation {
+
+    public static void init() {
+        RxJavaPlugins.setOnCompletableAssembly(RxTelemetryPropagation::wrapCompletable);
+        RxJavaPlugins.setOnSingleAssembly(RxTelemetryPropagation::wrapSingle);
+        RxJavaPlugins.setOnMaybeAssembly(RxTelemetryPropagation::wrapMaybe);
+        RxJavaPlugins.setOnObservableAssembly(RxTelemetryPropagation::wrapObservable);
+        RxJavaPlugins.setOnFlowableAssembly(RxTelemetryPropagation::wrapFlowable);
+    }
+
+    private static Completable wrapCompletable(Completable source) {
+        Context context = Context.current();
+        return Completable.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return source;
+            }
+        });
+    }
+
+    private static <T> Single<T> wrapSingle(Single<T> source) {
+        Context context = Context.current();
+        return Single.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return source;
+            }
+        });
+    }
+
+    private static <T> Maybe<T> wrapMaybe(Maybe<T> source) {
+        Context context = Context.current();
+        return Maybe.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return source;
+            }
+        });
+    }
+
+    private static <T> Observable<T> wrapObservable(Observable<T> source) {
+        Context context = Context.current();
+        return Observable.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return source;
+            }
+        });
+    }
+
+    private static <T> Flowable<T> wrapFlowable(Flowable<T> source) {
+        Context context = Context.current();
+        return Flowable.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return source;
+            }
+        });
+    }
+}

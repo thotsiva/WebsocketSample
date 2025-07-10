@@ -1,0 +1,117 @@
+package your.package.telemetry;
+
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.reactivex.*;
+import io.reactivex.plugins.RxJavaPlugins;
+
+public class RxTelemetryPropagation {
+
+    public static void init() {
+        RxJavaPlugins.setOnCompletableSubscribe(RxTelemetryPropagation::wrapCompletableObserver);
+        RxJavaPlugins.setOnSingleSubscribe(RxTelemetryPropagation::wrapSingleObserver);
+        RxJavaPlugins.setOnMaybeSubscribe(RxTelemetryPropagation::wrapMaybeObserver);
+        RxJavaPlugins.setOnObservableSubscribe(RxTelemetryPropagation::wrapObservableObserver);
+        RxJavaPlugins.setOnFlowableSubscribe(RxTelemetryPropagation::wrapFlowableSubscriber);
+    }
+
+    private static CompletableObserver wrapCompletableObserver(Completable source, CompletableObserver observer) {
+        Context context = Context.current();
+        return new CompletableObserver() {
+            @Override public void onSubscribe(Disposable d) { observer.onSubscribe(d); }
+            @Override public void onComplete() {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onComplete();
+                }
+            }
+            @Override public void onError(Throwable e) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onError(e);
+                }
+            }
+        };
+    }
+
+    private static <T> SingleObserver<? super T> wrapSingleObserver(Single<T> source, SingleObserver<? super T> observer) {
+        Context context = Context.current();
+        return new SingleObserver<T>() {
+            @Override public void onSubscribe(Disposable d) { observer.onSubscribe(d); }
+            @Override public void onSuccess(T value) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onSuccess(value);
+                }
+            }
+            @Override public void onError(Throwable e) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onError(e);
+                }
+            }
+        };
+    }
+
+    private static <T> MaybeObserver<? super T> wrapMaybeObserver(Maybe<T> source, MaybeObserver<? super T> observer) {
+        Context context = Context.current();
+        return new MaybeObserver<T>() {
+            @Override public void onSubscribe(Disposable d) { observer.onSubscribe(d); }
+            @Override public void onSuccess(T value) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onSuccess(value);
+                }
+            }
+            @Override public void onError(Throwable e) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onError(e);
+                }
+            }
+            @Override public void onComplete() {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onComplete();
+                }
+            }
+        };
+    }
+
+    private static <T> Observer<? super T> wrapObservableObserver(Observable<T> source, Observer<? super T> observer) {
+        Context context = Context.current();
+        return new Observer<T>() {
+            @Override public void onSubscribe(Disposable d) { observer.onSubscribe(d); }
+            @Override public void onNext(T value) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onNext(value);
+                }
+            }
+            @Override public void onError(Throwable e) {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onError(e);
+                }
+            }
+            @Override public void onComplete() {
+                try (Scope scope = context.makeCurrent()) {
+                    observer.onComplete();
+                }
+            }
+        };
+    }
+
+    private static <T> org.reactivestreams.Subscriber<? super T> wrapFlowableSubscriber(Flowable<T> source, org.reactivestreams.Subscriber<? super T> subscriber) {
+        Context context = Context.current();
+        return new org.reactivestreams.Subscriber<T>() {
+            @Override public void onSubscribe(org.reactivestreams.Subscription s) { subscriber.onSubscribe(s); }
+            @Override public void onNext(T value) {
+                try (Scope scope = context.makeCurrent()) {
+                    subscriber.onNext(value);
+                }
+            }
+            @Override public void onError(Throwable e) {
+                try (Scope scope = context.makeCurrent()) {
+                    subscriber.onError(e);
+                }
+            }
+            @Override public void onComplete() {
+                try (Scope scope = context.makeCurrent()) {
+                    subscriber.onComplete();
+                }
+            }
+        };
+    }
+}

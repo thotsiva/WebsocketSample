@@ -1,0 +1,135 @@
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributesBuilder;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class CustomLogger {
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer(CustomLogger.class.getName());
+    private final Logger logger;
+
+    private CustomLogger(Class<?> clazz) {
+        this.logger = LoggerFactory.getLogger(clazz);
+    }
+
+    public static CustomLogger create() {
+        return new CustomLogger(CustomLogger.class);
+    }
+
+    public static CustomLogger create(Class<?> clazz) {
+        return new CustomLogger(clazz);
+    }
+
+    public void info(Span span, String transactionId, String appName,
+                     String eventName, String action, String description,
+                     Result result, String reason, String... additionalFields) {
+        recordSpanEvent(span, transactionId, appName, eventName, action, description, result, reason, additionalFields);
+        try {
+            String message = formatLogMessage(transactionId, appName, eventName, action, description, result, reason, additionalFields);
+            logger.info(message);
+        } catch (Exception e) {
+            logger.error("custom_logger_exception=\"error formatting info log\"", e);
+        }
+    }
+
+    public void error(Span span, String transactionId, String appName,
+                      String eventName, String action, String description,
+                      Result result, String reason, String... additionalFields) {
+        recordSpanEvent(span, transactionId, appName, eventName, action, description, result, reason, additionalFields);
+        try {
+            String message = formatLogMessage(transactionId, appName, eventName, action, description, result, reason, additionalFields);
+            logger.error(message);
+        } catch (Exception e) {
+            logger.error("custom_logger_exception=\"error formatting error log\"", e);
+        }
+    }
+
+    public void debug(Span span, String transactionId, String appName,
+                      String eventName, String action, String description,
+                      Result result, String reason, String... additionalFields) {
+        recordSpanEvent(span, transactionId, appName, eventName, action, description, result, reason, additionalFields);
+        try {
+            String message = formatLogMessage(transactionId, appName, eventName, action, description, result, reason, additionalFields);
+            logger.debug(message);
+        } catch (Exception e) {
+            logger.error("custom_logger_exception=\"error formatting debug log\"", e);
+        }
+    }
+
+    private void recordSpanEvent(Span span, String transactionId, String appName,
+                                  String eventName, String action, String description,
+                                  Result result, String reason, String... additionalFields) {
+        boolean hasValidSpan = span != null && span.getSpanContext().isValid();
+
+        Span spanToUse = hasValidSpan ? span :
+            tracer.spanBuilder(action + "_orphan_span")
+                  .setParent(Context.current()) // attach to whatever context is active
+                  .setSpanKind(SpanKind.INTERNAL)
+                  .startSpan();
+
+        boolean isOrphan = !hasValidSpan;
+
+        try (Scope scope = spanToUse.makeCurrent()) {
+            AttributesBuilder attrBuilder = Attributes.builder()
+                    .put("transaction_id", transactionId)
+                    .put("app_name", appName)
+                    .put("event_name", eventName)
+                    .put("action", action)
+                    .put("result", result.toString())
+                    .put("reason", reason)
+                    .put("description", description);
+
+            if (additionalFields != null && additionalFields.length % 2 == 0) {
+                for (int i = 0; i < additionalFields.length; i += 2) {
+                    attrBuilder.put(AttributeKey.stringKey(additionalFields[i]), additionalFields[i + 1]);
+                }
+            }
+
+            if (isOrphan) {
+                spanToUse.setAttribute("orphan_span", true);
+                attrBuilder.put("span_type", "orphan");
+            }
+
+            spanToUse.addEvent(action, attrBuilder.build());
+
+        } catch (Exception e) {
+            logger.warn("custom_logger_exception=\"error during span event recording\"", e);
+        } finally {
+            if (isOrphan) {
+                spanToUse.end(); // Only end span if we created it locally
+            }
+        }
+    }
+
+    private String formatLogMessage(String transactionId, String appName,
+                                    String eventName, String action, String description,
+                                    Result result, String reason, String... additionalFields) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("transaction_id=").append(transactionId).append(" ");
+        sb.append("app_name=").append(appName).append(" ");
+        sb.append("event_name=").append(eventName).append(" ");
+        sb.append("action=").append(action).append(" ");
+        sb.append("description=").append("\"").append(description).append("\"").append(" ");
+        sb.append("result=").append(result).append(" ");
+        sb.append("reason=").append(reason);
+
+        if (additionalFields != null && additionalFields.length % 2 == 0) {
+            for (int i = 0; i < additionalFields.length; i += 2) {
+                sb.append(" ").append(additionalFields[i]).append("=").append(additionalFields[i + 1]);
+            }
+        }
+
+        return sb.toString();
+    }
+
+    public enum Result {
+        Success, Failure
+    }
+}

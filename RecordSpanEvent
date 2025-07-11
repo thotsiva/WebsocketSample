@@ -1,0 +1,44 @@
+private void recordSpanEvent(Span span, String transactionId, String app, String event, String action,
+                             String message, Result result, String reason, String... additionalFields) {
+
+    boolean isOrphan = (span == null || !span.getSpanContext().isValid());
+
+    if (isOrphan) {
+        span = GlobalOpenTelemetry.getTracer(CustomLogger.class.getName())
+                .spanBuilder(action + "_orphan_span")
+                .setSpanKind(SpanKind.INTERNAL)
+                .startSpan();
+    }
+
+    try (Scope scope = span.makeCurrent()) {
+        // Add attributes
+        AttributesBuilder attrBuilder = Attributes.builder()
+                .put("transaction_id", transactionId)
+                .put("app_name", app)
+                .put("event_name", event)
+                .put("action", action)
+                .put("description", message)
+                .put("result", result.name())
+                .put("reason", reason);
+
+        if (additionalFields != null && additionalFields.length % 2 == 0) {
+            for (int i = 0; i < additionalFields.length; i += 2) {
+                attrBuilder.put(additionalFields[i], additionalFields[i + 1]);
+            }
+        }
+
+        // ✅ Add event to span — not creating a new one
+        span.addEvent(action, attrBuilder.build());
+
+        if (result == Result.Failure) {
+            span.setStatus(StatusCode.ERROR, reason);
+        }
+
+    } catch (Exception e) {
+        logger.error("CustomLogger: Exception while recording span event", e);
+    } finally {
+        if (isOrphan) {
+            span.end(); // Only end orphan spans
+        }
+    }
+}

@@ -1,0 +1,55 @@
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+import io.reactivex.*;
+
+public final class RxJavaContextPropagator {
+
+    private RxJavaContextPropagator() {
+        // utility class
+    }
+
+    public static <T> Single<T> withContext(Single<T> original) {
+        Context context = Context.current();
+        return Single.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return original;
+            }
+        });
+    }
+
+    public static <T> Maybe<T> withContext(Maybe<T> original) {
+        Context context = Context.current();
+        return Maybe.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return original;
+            }
+        });
+    }
+
+    public static Completable withContext(Completable original) {
+        Context context = Context.current();
+        return Completable.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return original;
+            }
+        });
+    }
+
+    public static <T> Observable<T> withContext(Observable<T> original) {
+        Context context = Context.current();
+        return Observable.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return original;
+            }
+        });
+    }
+
+    public static <T> Flowable<T> withContext(Flowable<T> original) {
+        Context context = Context.current();
+        return Flowable.defer(() -> {
+            try (Scope scope = context.makeCurrent()) {
+                return original;
+            }
+        });
+    }
+}

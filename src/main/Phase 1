@@ -1,0 +1,156 @@
+ELF Migration – Proposed Solution and Approach
+Overview
+As part of our observability modernization, we are migrating our logging and telemetry stack to leverage ELF (Enterprise Logging Framework). Our objective is to enable more granular tracing and monitoring capabilities with minimal disruption to existing services.
+
+We propose a phased migration approach, starting with non-invasive integration to capture logs and telemetry signals via ELF. This ensures a smooth transition while maintaining application stability and existing logging capabilities.
+
+Goals
+Seamlessly integrate ELF with minimal code changes.
+
+Ensure that applications start publishing structured telemetry data (Spans and Logs).
+
+Maintain backward compatibility with Splunk, our current logging system.
+
+Establish a foundation for future enhancements like distributed tracing.
+
+Phase 1 – Baseline ELF Integration
+Scope
+Integrate the application with the ELFOtelConfig utility.
+
+Modify only the AppLogger utility to publish structured span events.
+
+Ensure log data flows to both ELF and Splunk.
+
+Approach
+Step 1: Add ELF Dependency
+Update the pom.xml with the necessary dependency:
+
+xml
+Copy
+Edit
+<dependency>
+    <groupId>com.company.observability</groupId>
+    <artifactId>elf-otel-config</artifactId>
+    <version>1.0.0</version>
+</dependency>
+Step 2: Initialize OpenTelemetry in Application Entry Point
+In MainVerticleLoader.java, initialize ELF using ELFOtelConfig:
+
+java
+Copy
+Edit
+import com.company.observability.ELFOtelConfig;
+
+public class MainVerticleLoader {
+    public static void main(String[] args) {
+        // Initialize OpenTelemetry
+        ELFOtelConfig.initOpenTelemetryHttp();
+
+        // Proceed with application bootstrapping
+    }
+}
+Step 3: AppLogger Integration with Span Creation
+Our applications use a custom utility AppLogger for centralized logging. This utility will be enhanced to record OpenTelemetry spans for each log entry.
+
+Modified AppLogger Example:
+java
+Copy
+Edit
+public class AppLogger {
+
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("AppTracer");
+
+    public static void info(String message, Map<String, String> attributes) {
+        recordSpanEvent("INFO", message, attributes);
+        log.info(message); // existing log
+    }
+
+    public static void error(String message, Map<String, String> attributes) {
+        recordSpanEvent("ERROR", message, attributes);
+        log.error(message);
+    }
+
+    public static void debug(String message, Map<String, String> attributes) {
+        recordSpanEvent("DEBUG", message, attributes);
+        log.debug(message);
+    }
+
+    private static void recordSpanEvent(String level, String message, Map<String, String> attributes) {
+        Span span = tracer.spanBuilder("logEvent").startSpan();
+        try (Scope scope = span.makeCurrent()) {
+            span.setAttribute("log.level", level);
+            span.setAttribute("log.message", message);
+            if (attributes != null) {
+                attributes.forEach(span::setAttribute);
+            }
+            span.addEvent("LogEvent");
+        } finally {
+            span.end();
+        }
+    }
+}
+Configuration for Log Routing (Log4j):
+Update log4j2.xml to allow dual routing:
+
+xml
+Copy
+Edit
+<Appenders>
+    <ELF name="ELFAppender" ... />
+    <Splunk name="SplunkAppender" ... />
+</Appenders>
+
+<Loggers>
+    <Root level="info">
+        <AppenderRef ref="ELFAppender"/>
+        <AppenderRef ref="SplunkAppender"/>
+    </Root>
+</Loggers>
+Outcome of Phase 1
+✅ What We Achieve:
+ELF receives logs with structured span data.
+
+Minimal code impact – centralized changes only in AppLogger.
+
+Validation made easier by cross-checking span data in ELF with existing Splunk logs.
+
+Application teams are not required to change business logic or logger usage patterns.
+
+⚠️ What We Don’t Achieve:
+Trace Hierarchy Not Established:
+
+No parent-child relationships between spans.
+
+Each log event is treated as an individual span.
+
+Full traceability across services will not be available in this phase.
+
+However, this limitation is acceptable in Phase 1 since most of our services currently do not rely on distributed tracing.
+
+Sample Log Outputs
+ELF Logs (Sample Span Format)
+json
+Copy
+Edit
+{
+  "span.name": "logEvent",
+  "log.level": "INFO",
+  "log.message": "User login initiated",
+  "service.name": "user-service",
+  "env": "prod",
+  "attributes": {
+    "userId": "abc123",
+    "method": "POST"
+  }
+}
+Splunk Logs
+pgsql
+Copy
+Edit
+[INFO] User login initiated | userId=abc123 | method=POST | service=user-service | env=prod
+Next Steps Post Phase 1
+Validate log flow and span generation across different modules.
+
+Capture feedback from application teams and observability teams.
+
+Plan Phase 2, focusing on establishing proper trace hierarchy using ContextPropagation, ParentSpan, and ChildSpan relationships across services.

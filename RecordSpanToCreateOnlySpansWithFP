@@ -1,0 +1,44 @@
+private void recordSpanEvent(
+        Span currentSpan,
+        String logLevelEventName,
+        String transactionId,
+        String app,
+        String event,
+        String action,
+        String message,
+        Result result,
+        String reason,
+        String... additionalFields) {
+
+    Span effectiveSpan = Optional.ofNullable(currentSpan)
+            .map(span -> GlobalTelemetry.getTracer(CustomLogger.className)
+                    .spanBuilder(action)
+                    .setParent(Context.current().with(span)))
+            .orElseGet(() -> GlobalTelemetry.getTracer(CustomLogger.className)
+                    .spanBuilder(action + "_orphanSpan")
+                    .setParent(Context.current()))
+            .setSpanKind(SpanKind.INTERNAL)
+            .startSpan();
+
+    try (Scope scope = effectiveSpan.makeCurrent()) {
+        buildLogAttributes(
+                logLevelEventName,
+                transactionId,
+                app,
+                event,
+                action,
+                message,
+                result,
+                reason,
+                additionalFields
+        ).asMap().forEach((key, value) -> {
+            if (value instanceof String) {
+                effectiveSpan.setAttribute(key.getKey(), (String) value);
+            }
+        });
+    } catch (Exception e) {
+        effectiveSpan.recordException(e);
+    } finally {
+        effectiveSpan.end();
+    }
+}

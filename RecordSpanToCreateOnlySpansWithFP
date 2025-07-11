@@ -42,3 +42,41 @@ private void recordSpanEvent(
         effectiveSpan.end();
     }
 }
+
+private Attributes buildLogAttributes(
+        String logLevelEventName,
+        String transactionId,
+        String app,
+        String event,
+        String action,
+        String desc,
+        Result result,
+        String reason,
+        String... additionalFields) {
+
+    List<String> baseAttributes = List.of(
+            "transaction_id", transactionId,
+            "app_name", app,
+            "event_name", event,
+            "action", action,
+            "desc", desc,
+            "result", result.name(),
+            "reason", reason,
+            "level", logLevelEventName
+    );
+
+    List<String> merged = new ArrayList<>(baseAttributes);
+    if (additionalFields != null && additionalFields.length > 0) {
+        merged.addAll(Arrays.asList(additionalFields));
+    }
+
+    AttributesBuilder builder = Attributes.builder();
+    IntStream.range(0, merged.size() / 2).forEach(i -> 
+        builder.put(
+            AttributeKey.stringKey(merged.get(i * 2)),
+            merged.get(i * 2 + 1)
+        )
+    );
+
+    return builder.build();
+}

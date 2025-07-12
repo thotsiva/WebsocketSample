@@ -1,0 +1,202 @@
+Phase 2 – Application Code Changes for Enhanced Traceability and Observability
+Overview
+In Phase 2, we focus on introducing true distributed tracing capabilities by embedding span hierarchy and contextual propagation directly into the application code. This enables full trace visibility and observability across the service layers—from HTTP entry points to internal handlers and helpers.
+
+The core objectives are:
+
+Establish Parent → Child span relationships.
+
+Maintain trace context across layers and threads.
+
+Overcome limitations of implicit context propagation in reactive/subscriber models.
+
+Step 1: Introduce TelemetryUtils.java for Span/Event Creation
+We created a utility class TelemetryUtils.java to encapsulate reusable methods for creating spans and events based on context. This enables consistent trace instrumentation across services and can eventually be moved to CommonUtils for shared usage.
+
+✅ Functionality Provided:
+
+createSpan(spanName): Creates a span without parent context.
+
+createSpanWithParent(spanName, parentSpan): Creates a child span under the given parent.
+
+addEventToSpan(span, eventName, attributes): Adds events with attributes to any active span.
+
+📌 Code Placeholder:
+
+java
+Copy
+Edit
+public class TelemetryUtils {
+    private static final Tracer tracer = GlobalOpenTelemetry.getTracer("AppTracer");
+
+    public static Span createSpan(String name) {
+        return tracer.spanBuilder(name).startSpan();
+    }
+
+    public static Span createSpanWithParent(String name, Span parent) {
+        return tracer.spanBuilder(name)
+                     .setParent(Context.current().with(parent))
+                     .startSpan();
+    }
+
+    public static void addEventToSpan(Span span, String event, Map<String, String> attributes) {
+        if (span != null) {
+            span.addEvent(event, Attributes.of(attributes.entrySet().stream()
+                .map(e -> AttributeKey.stringKey(e.getKey()), e -> e.getValue())
+                .toArray(AttributeKey[]::new)));
+        }
+    }
+}
+Step 2: Parent Span Creation in HttpRouter
+We initialize a parent span at the HTTP entry point by modifying the HttpRouter. An endHandler ensures that the span is properly closed once the request is fully processed. The parent span is stored in the RoutingContext for downstream access.
+
+📌 Code Placeholder:
+
+java
+Copy
+Edit
+router.route().handler(ctx -> {
+    Span parentSpan = TelemetryUtils.createSpan("HTTP_Request");
+    ctx.put("parentSpan", parentSpan);
+    try (Scope scope = parentSpan.makeCurrent()) {
+        ctx.next(); // move to next handler
+    }
+});
+
+router.route().endHandler(ctx -> {
+    Span span = ctx.get("parentSpan");
+    if (span != null) span.end();
+});
+Step 3: Use Parent Span Across Layers (Handler, Validator, Helpers)
+The parent span retrieved from RoutingContext is used to create child spans in downstream layers (e.g., validators, service handlers). If RoutingContext is not directly available, the parentSpan is explicitly passed as a method parameter.
+
+📌 Code Placeholder:
+
+java
+Copy
+Edit
+public void validateRequest(JsonObject request, Span parentSpan) {
+    Span validationSpan = TelemetryUtils.createSpanWithParent("RequestValidation", parentSpan);
+    try (Scope scope = validationSpan.makeCurrent()) {
+        // Validation logic
+    } finally {
+        validationSpan.end();
+    }
+}
+🔧 Code Pattern Change:
+
+If RoutingContext is used: retrieve parent span via ctx.get("parentSpan").
+
+If not: pass the parentSpan explicitly to service or helper methods.
+
+Step 4: Scoped Logging within Child Spans
+Child spans created at the start of methods are made current in scope using Java’s try-with-resources. Our enhanced AppLogger (or AMEXLogger) can now accept a Span parameter to associate logs with the active span.
+
+📌 Code Placeholder:
+
+java
+Copy
+Edit
+public void processBusinessLogic(Span parentSpan) {
+    Span childSpan = TelemetryUtils.createSpanWithParent("BusinessLogic", parentSpan);
+    try (Scope scope = childSpan.makeCurrent()) {
+        AppLogger.info("Business processing started", childSpan, attributesMap);
+        // logic...
+    } finally {
+        childSpan.end();
+    }
+}
+Step 5: Pass Span Across Nested Method Calls
+In methods that further delegate to downstream flows, ensure the current span is passed as a parameter to maintain hierarchical trace continuity.
+
+📌 Code Example:
+
+java
+Copy
+Edit
+public void handleUserCreation(JsonObject payload, Span parentSpan) {
+    Span userSpan = TelemetryUtils.createSpanWithParent("UserCreateHandler", parentSpan);
+    try (Scope scope = userSpan.makeCurrent()) {
+        helperService.createUser(payload, userSpan);
+    } finally {
+        userSpan.end();
+    }
+}
+Why This Approach
+Due to issues with context propagation in reactive streams and asynchronous flows, standard propagation using Context.current() is often insufficient (especially inside subscribe() blocks or Vert.x handlers). We evaluated utility-based context propagation, but it proved unreliable in these scenarios.
+
+✅ Our solution: Explicitly pass the active span where required, ensuring trace structure is preserved regardless of thread or execution context.
+
+What We Achieve in Phase 2
+✅ Complete Traceability across all service layers.
+
+✅ Proper Parent-Child Span Hierarchy throughout the call stack.
+
+✅ End-to-End Observability via trace IDs visible in ELF and correlatable in Splunk.
+
+✅ Enhanced debugging and operational intelligence.
+
+Sample Log Outputs
+ELF Trace Log
+
+
+
+
+Next Steps
+To ensure a robust and compliant ELF integration strategy, the following technical follow-ups are proposed:
+
+✅ 1. Collaborate with the Central ELF Migration Team
+Objective: Review the proposed phased approach and gather feedback from the central ELF migration team.
+
+Action Items:
+
+Present Phase 1 (baseline integration) and Phase 2 (traceable spans with parent-child hierarchy) implementations.
+
+Validate if these strategies align with organization-wide observability standards and logging best practices.
+
+Incorporate any recommendations or reusable components already established by the ELF team.
+
+✅ 2. Discuss PII Masking Strategies
+Objective: Ensure compliance with data privacy regulations (e.g., GDPR, internal data policies) by avoiding exposure of Personally Identifiable Information (PII) in logs.
+
+Action Items:
+
+Explore available data masking or redaction capabilities in ELF.
+
+Evaluate whether masking should happen:
+
+At the log generation layer (e.g., inside AppLogger),
+
+Or within ELF ingestion pipelines using rules/filters.
+
+Define a consistent PII-handling mechanism for keys like userId, email, SSN, etc.
+
+✅ 3. Clarify Partitioning and Log Flow Mechanism
+Objective: Ensure log events are correctly sharded and optimized for performance within ELF.
+
+Action Items:
+
+Confirm partition sizing and schema requirements with the ELF infrastructure team.
+
+Understand log routing rules and whether partitioning is based on:
+
+traceId, serviceName, or env
+
+Volume thresholds or tenant-specific data isolation
+
+Align log4j or OpenTelemetry exporter configurations accordingly to ensure correct partitioning behavior.
+
+
+
+
+
+Context Propagation Limitations
+Due to issues in async/reactive flows (e.g., subscribe() blocks), implicit context propagation is not always reliable. Explicit span passing is more effective and predictable.
+
+
+What We Achieve:
+Full traceability with parent-child span hierarchy.
+
+End-to-end visibility in ELF with traceId correlation.
+
+Observability aligned with distributed tracing standards.

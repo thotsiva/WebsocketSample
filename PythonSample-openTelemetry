@@ -240,3 +240,46 @@ class CustomLogger:
         ]]
         extras = [f'{k}="{v}"' for k, v in (addl or {}).items()]
         return " | ".join(base + extras)
+
+
+
+
+------ updated elf_tracing.py------------------------------------
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_NAMESPACE, SERVICE_INSTANCE_ID, DEPLOYMENT_ENVIRONMENT
+import socket
+
+def init_tracer(service_name: str, service_namespace: str = "default", environment: str = "dev", use_ssl=True):
+    hostname = socket.gethostname()
+    
+    attributes = {
+        SERVICE_NAME: service_name,
+        SERVICE_NAMESPACE: service_namespace,
+        SERVICE_INSTANCE_ID: hostname,
+        DEPLOYMENT_ENVIRONMENT: environment,
+    }
+    print(f"[ELFUtility] OTEL resource attributes: {attributes}")
+
+    resource = Resource(attributes=attributes)
+    trace.set_tracer_provider(TracerProvider(resource=resource))
+    tracer = trace.get_tracer(service_name)
+
+    endpoint = "localhost:4317"  # or get_vault_token("OTEL_TRACE_URL") if prod
+
+    if use_ssl:
+        from src.elf.common import get_grpc_ssl_cred
+        from certs import certificate_path
+        cert_path = certificate_path()
+        credentials = get_grpc_ssl_cred(cert_path)
+        exporter = OTLPSpanExporter(endpoint=endpoint, credentials=credentials)
+    else:
+        # Use insecure channel for local debugging / no certs
+        exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+
+    span_processor = BatchSpanProcessor(exporter)
+    trace.get_tracer_provider().add_span_processor(span_processor)
+
+    return tracer

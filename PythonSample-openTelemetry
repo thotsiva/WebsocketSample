@@ -151,3 +151,92 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+----------------------------------------Modified custom logger----------------------------
+
+import logging
+from opentelemetry.trace import SpanKind, get_tracer, get_current_span, set_span_in_context
+from opentelemetry.context import attach, detach
+
+class CustomLogger:
+    def __init__(self, service_name: str):
+        self.logger = logging.getLogger(service_name)
+        handler = logging.StreamHandler()
+        fmt = '%(asctime)s | %(levelname)s | %(message)s'
+        handler.setFormatter(logging.Formatter(fmt))
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.DEBUG)
+        self.tracer = get_tracer(service_name)
+
+    def info(self, span, txn, app, event, action, desc, result, reason, **fields):
+        self._log_with_span("INFO", span, txn, app, event, action, desc, result, reason, fields)
+
+    def debug(self, span, txn, app, event, action, desc, result, reason, **fields):
+        self._log_with_span("DEBUG", span, txn, app, event, action, desc, result, reason, fields)
+
+    def error(self, span, txn, app, event, action, desc, result, reason, **fields):
+        self._log_with_span("ERROR", span, txn, app, event, action, desc, result, reason, fields)
+
+    def _log_with_span(self, level, span, txn, app, event, action, desc, result, reason, addl):
+        try:
+            self._record_event(span, txn, app, event, action, desc, result, reason, addl)
+            msg = self._fmt(txn, app, event, action, desc, result, reason, addl)
+            getattr(self.logger, level.lower())(msg)
+        except Exception as e:
+            self.logger.fatal('custom_logger_exception="formatter_error"', exc_info=e)
+
+    def _record_event(self, span, txn, app, event, action, desc, result, reason, addl):
+        current = span or get_current_span()
+        valid = current and current.get_span_context().is_valid
+        orphan = False
+
+        if not valid:
+            # Start a new span if no valid span exists
+            current = self.tracer.start_span(f"{action}_orphan_span", kind=SpanKind.INTERNAL)
+            orphan = True
+
+        token = attach(set_span_in_context(current))
+        try:
+            attrs = {
+                "transaction_id": txn,
+                "app_name": app,
+                "event_name": event,
+                "action": action,
+                "description": desc,
+                "result": result,
+                "reason": reason
+            }
+            attrs.update(addl or {})
+
+            if orphan:
+                # If we had to create a new span, we set the attributes on it
+                for k, v in attrs.items():
+                    current.set_attribute(k, v)
+            else:
+                # Otherwise, just add an event to the active span
+                current.add_event(event, attributes=attrs)
+        finally:
+            detach(token)
+            if orphan:
+                current.end()
+
+    def _fmt(self, txn, app, event, action, desc, result, reason, addl):
+        base = [f'{k}="{v}"' for k, v in [
+            ("transaction_id", txn),
+            ("app_name", app),
+            ("event_name", event),
+            ("action", action),
+            ("description", desc),
+            ("result", result),
+            ("reason", reason)
+        ]]
+        extras = [f'{k}="{v}"' for k, v in (addl or {}).items()]
+        return " | ".join(base + extras)

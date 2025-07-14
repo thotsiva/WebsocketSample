@@ -1,0 +1,153 @@
+src/db_utilities/read_vault.py:
+python
+Copy
+Edit
+def get_vault_token(key: str) -> str:
+    # Replace with real Vault KV lookup in production
+    return "localhost:4317"
+src/elf/common.py:
+python
+Copy
+Edit
+import grpc
+
+def get_grpc_ssl_cred(cert_path: str):
+    with open(cert_path, "rb") as f:
+        ca = f.read()
+    return grpc.ssl_channel_credentials(root_certificates=ca)
+certs/__init__.py:
+python
+Copy
+Edit
+def certificate_path() -> str:
+    return "certs/ca.crt"
+4. ELF Utility
+elf_utility/elf_tracing.py:
+python
+Copy
+Edit
+import socket
+from opentelemetry import trace
+from opentelemetry.sdk.resources import (
+    SERVICE_NAME, SERVICE_NAMESPACE, SERVICE_INSTANCE_ID, DEPLOYMENT_ENVIRONMENT, Resource,
+)
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+from certs import certificate_path
+from src.db_utilities.read_vault import get_vault_token
+from src.elf.common import get_grpc_ssl_cred
+
+def init_tracer(service_name: str, service_namespace: str = "default", environment: str = "dev"):
+    hostname = socket.gethostname()
+    cert_path = certificate_path()
+
+    attributes = {
+        SERVICE_NAME: service_name,
+        SERVICE_NAMESPACE: service_namespace,
+        SERVICE_INSTANCE_ID: hostname,
+        DEPLOYMENT_ENVIRONMENT: environment,
+    }
+    print(f"[ELFUtility] OTEL resource attributes: {attributes}")
+
+    resource = Resource(attributes=attributes)
+    trace.set_tracer_provider(TracerProvider(resource=resource))
+    tracer = trace.get_tracer(service_name)
+
+    exporter = OTLPSpanExporter(
+        endpoint=get_vault_token("OTEL_TRACE_URL"),
+        credentials=get_grpc_ssl_cred(cert_path),
+    )
+    span_processor = BatchSpanProcessor(exporter)
+    trace.get_tracer_provider().add_span_processor(span_processor)
+
+    return tracer
+elf_utility/custom_logger.py:
+python
+Copy
+Edit
+from opentelemetry.trace import SpanKind, get_tracer, get_current_span
+from opentelemetry.context import attach, detach, set_span_in_context
+import logging
+
+class CustomLogger:
+    def __init__(self, service_name: str):
+        self.logger = logging.getLogger(service_name)
+        handler = logging.StreamHandler()
+        fmt = '%(asctime)s | %(levelname)s | %(message)s'
+        handler.setFormatter(logging.Formatter(fmt))
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.DEBUG)
+        self.tracer = get_tracer(service_name)
+
+    def info(self, span, txn, app, event, action, desc, result, reason, **fields):
+        self._log_with_span("INFO", span, txn, app, event, action, desc, result, reason, fields)
+
+    def debug(self, span, txn, app, event, action, desc, result, reason, **fields):
+        self._log_with_span("DEBUG", span, txn, app, event, action, desc, result, reason, fields)
+
+    def error(self, span, txn, app, event, action, desc, result, reason, **fields):
+        self._log_with_span("ERROR", span, txn, app, event, action, desc, result, reason, fields)
+
+    def _log_with_span(self, level, span, txn, app, event, action, desc, result, reason, addl):
+        try:
+            self._record_event(span, txn, app, event, action, desc, result, reason, addl)
+            msg = self._fmt(txn, app, event, action, desc, result, reason, addl)
+            getattr(self.logger, level.lower())(msg)
+        except Exception as e:
+            self.logger.fatal('custom_logger_exception="formatter_error"', exc_info=e)
+
+    def _record_event(self, span, txn, app, event, action, desc, result, reason, addl):
+        current = span or get_current_span()
+        valid = current and current.get_span_context().is_valid
+        if not valid:
+            current = self.tracer.start_span(f"{action}_orphan_span", kind=SpanKind.INTERNAL)
+            orphan = True
+        else:
+            orphan = False
+
+        token = attach(set_span_in_context(current))
+        try:
+            attrs = {"transaction_id": txn, "app_name": app, "event_name": event,
+                     "action": action, "description": desc, "result": result, "reason": reason}
+            attrs.update(addl or {})
+            if orphan:
+                for k, v in attrs.items():
+                    current.set_attribute(k, v)
+            else:
+                current.add_event(event, attributes=attrs)
+        finally:
+            detach(token)
+            if orphan:
+                current.end()
+
+    def _fmt(self, txn, app, event, action, desc, result, reason, addl):
+        base = [f'{k}="{v}"' for k, v in [
+            ("transaction_id", txn), ("app_name", app), ("event_name", event),
+            ("action", action), ("description", desc), ("result", result), ("reason", reason)
+        ]]
+        extras = [f'{k}="{v}"' for k, v in (addl or {}).items()]
+        return " | ".join(base + extras)
+5. sample_app/main.py:
+python
+Copy
+Edit
+import time
+from elf_utility.elf_tracing import init_tracer
+from elf_utility.custom_logger import CustomLogger
+
+def main():
+    tracer = init_tracer("demo-service", environment="local")
+    logger = CustomLogger("demo-service")
+
+    with tracer.start_as_current_span("main-span") as span:
+        logger.debug(span, "txn-001", "demoApp", "startup", "init", "Initializing app", "SUCCESS", "none")
+        logger.info(span, "txn-002", "demoApp", "user_login", "auth", "User login complete", "SUCCESS", "valid_creds", user_id="alice")
+        logger.error(span, "txn-003", "demoApp", "payment_error", "charge", "Payment failed", "FAILURE", "insufficient_funds", order_id="ORD-789")
+
+    # Orphan event (no active span)
+    logger.info(None, "txn-004", "demoApp", "cleanup", "cleanup", "Cleanup after exit", "SUCCESS", "all_done")
+
+if __name__ == "__main__":
+    main()

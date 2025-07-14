@@ -1,0 +1,14 @@
+1. ELF Proposed Migration Approach (Java):
+This morning, I walked the team through the proposed migration approach. Both Satnam and Pradeepta are aligned with it. We will need to discuss this further with the ELF Migration Team to gather their input and incorporate any suggestions they may have during the migration process.
+
+I have requested Brynne, Bethany, and Lance to help schedule a call with the ELF Team based on everyone's availability.
+
+Note: Satnam recommended checking with the ELF Team whether they have previously handled migrations involving services that interact with third-party or connector services. If not, he suggested we take up a POC to evaluate this scenario and proceed accordingly.
+
+2. Python Approach:
+I have also drafted a migration approach for Python and tested it locally. Since I currently do not have the necessary permissions to push or deploy the code, I created a sample application locally and published the logs to a local ZIPKIN server. Please find the sample trace attached.
+
+Tomorrow, I will connect with Shivam or someone from the Python team to integrate, validate, and discuss this approach further.
+
+3. Gap Analysis for Transcript Report:
+Starting today, I am focusing more on this activity. I am currently reviewing the existing report available in Splunk and cross-verifying it against CRS. I will continue to concentrate on this gap analysis.

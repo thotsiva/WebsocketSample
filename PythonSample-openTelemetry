@@ -468,3 +468,94 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+--------------------------------------async implementation--------------------------------------
+
+# sample_app/async_loader.py
+
+import asyncio
+from opentelemetry import trace
+from elf_utility.custom_logger import CustomLogger
+
+tracer = trace.get_tracer(__name__)
+logger = CustomLogger("demo-service")
+
+class AsyncDataLoader:
+    async def load_data(self):
+        with tracer.start_as_current_span("load-data") as span:
+            logger.info(span, "txn-201", "asyncApp", "load_data", "started", "Loading data...", "IN_PROGRESS", "start_triggered")
+            await asyncio.sleep(0.2)
+            logger.info(span, "txn-201", "asyncApp", "load_data", "ended", "Data loaded", "SUCCESS", "completed", rows=1000)
+
+
+
+# sample_app/async_processor.py
+
+import asyncio
+from opentelemetry import trace
+from elf_utility.custom_logger import CustomLogger
+
+tracer = trace.get_tracer(__name__)
+logger = CustomLogger("demo-service")
+
+class AsyncDataProcessor:
+    async def process_data(self):
+        with tracer.start_as_current_span("process-data") as span:
+            logger.info(span, "txn-202", "asyncApp", "process_data", "started", "Processing data...", "IN_PROGRESS", "start_triggered")
+            await asyncio.sleep(0.3)
+            logger.info(span, "txn-202", "asyncApp", "process_data", "ended", "Data processed", "SUCCESS", "completed", output="cleaned_data.csv")
+
+
+
+# sample_app/async_saver.py
+
+import asyncio
+from opentelemetry import trace
+from elf_utility.custom_logger import CustomLogger
+
+tracer = trace.get_tracer(__name__)
+logger = CustomLogger("demo-service")
+
+class AsyncResultSaver:
+    async def save_results(self):
+        with tracer.start_as_current_span("save-results") as span:
+            logger.info(span, "txn-203", "asyncApp", "save_results", "started", "Saving results...", "IN_PROGRESS", "start_triggered")
+            await asyncio.sleep(0.2)
+            logger.info(span, "txn-203", "asyncApp", "save_results", "ended", "Results saved", "SUCCESS", "completed", file_path="/tmp/async_output.json")
+
+
+# sample_app/main_async.py
+
+import asyncio
+from opentelemetry import trace
+from elf_utility.elf_tracing import init_tracer
+from elf_utility.custom_logger import CustomLogger
+
+from sample_app.async_loader import AsyncDataLoader
+from sample_app.async_processor import AsyncDataProcessor
+from sample_app.async_saver import AsyncResultSaver
+
+tracer = init_tracer("async-demo-service", environment="local")
+logger = CustomLogger("async-demo-service")
+
+async def main():
+    with tracer.start_as_current_span("main-span") as span:
+        logger.debug(span, "txn-200", "asyncApp", "startup", "init", "Initializing async app", "SUCCESS", "none")
+
+        loader = AsyncDataLoader()
+        processor = AsyncDataProcessor()
+        saver = AsyncResultSaver()
+
+        # Run async methods concurrently (optional: await all)
+        await loader.load_data()
+        await processor.process_data()
+        await saver.save_results()
+
+        logger.info(span, "txn-204", "asyncApp", "main", "finished", "Async processing complete", "SUCCESS", "flow_complete")
+
+    logger.info(None, "txn-205", "asyncApp", "cleanup", "cleanup", "Cleanup complete", "SUCCESS", "done")
+
+if __name__ == "__main__":
+    asyncio.run(main())

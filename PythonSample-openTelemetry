@@ -335,3 +335,48 @@ if __name__ == "__main__":
     main()
 
 
+---------- updated main.py without sending parent span as paramater-----------------
+
+import time
+from opentelemetry import trace
+from elf_utility.elf_tracing import init_tracer
+from elf_utility.custom_logger import CustomLogger
+
+# Initialize tracer and logger
+tracer = init_tracer("demo-service", environment="local")
+logger = CustomLogger("demo-service")
+
+def load_data():
+    with tracer.start_as_current_span("load-data") as span:
+        logger.info(span, "txn-101", "demoApp", "load_data", "started", "Loading data...", "IN_PROGRESS", "start_triggered")
+        time.sleep(0.2)
+        logger.info(span, "txn-101", "demoApp", "load_data", "ended", "Data loaded", "SUCCESS", "completed", rows=1000)
+
+def process_data():
+    with tracer.start_as_current_span("process-data") as span:
+        logger.info(span, "txn-102", "demoApp", "process_data", "started", "Processing data...", "IN_PROGRESS", "start_triggered")
+        time.sleep(0.3)
+        logger.info(span, "txn-102", "demoApp", "process_data", "ended", "Data processed", "SUCCESS", "completed", output="cleaned_data.csv")
+
+def save_results():
+    with tracer.start_as_current_span("save-results") as span:
+        logger.info(span, "txn-103", "demoApp", "save_results", "started", "Saving results...", "IN_PROGRESS", "start_triggered")
+        time.sleep(0.2)
+        logger.info(span, "txn-103", "demoApp", "save_results", "ended", "Results saved", "SUCCESS", "completed", file_path="/tmp/output.json")
+
+def main():
+    with tracer.start_as_current_span("main-span") as span:
+        logger.debug(span, "txn-001", "demoApp", "startup", "init", "Initializing app", "SUCCESS", "none")
+
+        # Now each function will implicitly use `main-span` as parent
+        load_data()
+        process_data()
+        save_results()
+
+        logger.info(span, "txn-004", "demoApp", "main", "finished", "Main processing completed", "SUCCESS", "flow_complete")
+
+    # Orphan event after span is closed
+    logger.info(None, "txn-005", "demoApp", "cleanup", "cleanup", "Cleanup after exit", "SUCCESS", "all_done")
+
+if __name__ == "__main__":
+    main()

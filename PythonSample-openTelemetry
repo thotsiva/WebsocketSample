@@ -380,3 +380,91 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+--------------------------------------with different files------------------------------------
+# sample_app/loader.py
+
+import time
+from opentelemetry import trace
+from elf_utility.custom_logger import CustomLogger
+
+tracer = trace.get_tracer(__name__)
+logger = CustomLogger("demo-service")
+
+class DataLoader:
+    def load_data(self):
+        with tracer.start_as_current_span("load-data") as span:
+            logger.info(span, "txn-101", "demoApp", "load_data", "started", "Loading data...", "IN_PROGRESS", "start_triggered")
+            time.sleep(0.2)
+            logger.info(span, "txn-101", "demoApp", "load_data", "ended", "Data loaded", "SUCCESS", "completed", rows=1000)
+
+
+
+# sample_app/processor.py
+
+import time
+from opentelemetry import trace
+from elf_utility.custom_logger import CustomLogger
+
+tracer = trace.get_tracer(__name__)
+logger = CustomLogger("demo-service")
+
+class DataProcessor:
+    def process_data(self):
+        with tracer.start_as_current_span("process-data") as span:
+            logger.info(span, "txn-102", "demoApp", "process_data", "started", "Processing data...", "IN_PROGRESS", "start_triggered")
+            time.sleep(0.3)
+            logger.info(span, "txn-102", "demoApp", "process_data", "ended", "Data processed", "SUCCESS", "completed", output="cleaned_data.csv")
+
+
+# sample_app/saver.py
+
+import time
+from opentelemetry import trace
+from elf_utility.custom_logger import CustomLogger
+
+tracer = trace.get_tracer(__name__)
+logger = CustomLogger("demo-service")
+
+class ResultSaver:
+    def save_results(self):
+        with tracer.start_as_current_span("save-results") as span:
+            logger.info(span, "txn-103", "demoApp", "save_results", "started", "Saving results...", "IN_PROGRESS", "start_triggered")
+            time.sleep(0.2)
+            logger.info(span, "txn-103", "demoApp", "save_results", "ended", "Results saved", "SUCCESS", "completed", file_path="/tmp/output.json")
+
+
+
+# sample_app/main.py
+
+from opentelemetry import trace
+from elf_utility.elf_tracing import init_tracer
+from elf_utility.custom_logger import CustomLogger
+
+from sample_app.loader import DataLoader
+from sample_app.processor import DataProcessor
+from sample_app.saver import ResultSaver
+
+tracer = init_tracer("demo-service", environment="local")
+logger = CustomLogger("demo-service")
+
+def main():
+    with tracer.start_as_current_span("main-span") as span:
+        logger.debug(span, "txn-001", "demoApp", "startup", "init", "Initializing app", "SUCCESS", "none")
+
+        # Instantiate classes and call methods
+        loader = DataLoader()
+        processor = DataProcessor()
+        saver = ResultSaver()
+
+        loader.load_data()
+        processor.process_data()
+        saver.save_results()
+
+        logger.info(span, "txn-004", "demoApp", "main", "finished", "Main processing completed", "SUCCESS", "flow_complete")
+
+    # Orphan event
+    logger.info(None, "txn-005", "demoApp", "cleanup", "cleanup", "Cleanup after exit", "SUCCESS", "all_done")
+
+if __name__ == "__main__":
+    main()

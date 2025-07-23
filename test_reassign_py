@@ -1,0 +1,81 @@
+import uuid
+import time
+from logger.log_manager import LogManager
+
+
+def simulate_reassign_flow():
+    # Shared correlation ID for the entire flow
+    correlation_id = str(uuid.uuid4())
+
+    # Common attributes passed to every log entry
+    common_kwargs = {
+        "correlationId": correlation_id,
+        "user": "john.doe",
+        "event": "reassignConversationEvent"
+    }
+
+    # Start a parent span for the full reassign flow
+    with LogManager.elf.start_span("reassign_conversation_flow") as parent_ctx:
+
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Flow",
+            message="Reassign flow started"
+        )
+
+        # Step 1: Validator
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Validator",
+            message="Validator started successfully"
+        )
+        time.sleep(0.2)
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Validator",
+            message="Validator ended successfully"
+        )
+
+        # Step 2: Handler
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Handler",
+            message="Handler started successfully"
+        )
+        time.sleep(0.2)
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Handler",
+            message="Handler ended successfully"
+        )
+
+        # Step 3: Helper
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Helper",
+            message="Helper started successfully"
+        )
+        time.sleep(0.2)
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Helper",
+            message="Helper ended successfully"
+        )
+
+        LogManager.info(
+            parent_context=parent_ctx,
+            **common_kwargs,
+            step="Reassign Flow",
+            message="Reassign flow completed"
+        )
+
+
+if __name__ == "__main__":
+    simulate_reassign_flow()

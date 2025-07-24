@@ -1,29 +1,37 @@
 import uuid
 import time
 from unittest.mock import patch
+
 from logger.log_manager import LogManager
 from opentelemetry.trace import set_span_in_context
+from opentelemetry import context as otel_context
+
 
 def run_validator_steps(parent_ctx, common_kwargs):
-    # Child span of "reassign_conversation_steps"
-    with LogManager.elf.start_span("Reassign Flow Validator", ctx=parent_ctx) as validator_span:
-        validator_ctx = set_span_in_context(validator_span)
+    # Attach the parent context globally so new spans inherit it
+    token = otel_context.attach(parent_ctx)
+    try:
+        with LogManager.elf.start_span("Reassign Flow Validator") as validator_span:
+            validator_ctx = set_span_in_context(validator_span)
 
-        LogManager.info(
-            parent_context=validator_ctx,
-            **common_kwargs,
-            step="Reassign Flow Validator",
-            log_message="Reassign flow validator called"
-        )
+            LogManager.info(
+                parent_context=validator_ctx,
+                **common_kwargs,
+                step="Reassign Flow Validator",
+                log_message="Reassign flow validator called"
+            )
 
-        time.sleep(1)  # Simulate processing delay
+            time.sleep(1)
 
-        LogManager.info(
-            parent_context=validator_ctx,
-            **common_kwargs,
-            step="Reassign Flow Validator",
-            log_message="Reassign flow validated successfully"
-        )
+            LogManager.info(
+                parent_context=validator_ctx,
+                **common_kwargs,
+                step="Reassign Flow Validator",
+                log_message="Reassign flow validated successfully"
+            )
+    finally:
+        otel_context.detach(token)  # Always clean up
+
 
 @patch(target="logger.log_manager.get_env", return_value="default")
 @patch("logger.log_manager.get_config")
@@ -42,7 +50,7 @@ def test_reassign_flow(mock_get_config, mock_get_env):
         "event": "reassignConversationEvent"
     }
 
-    # Root span: Reassign flow
+    # Start parent span for the flow
     with LogManager.elf.start_span("Reassign Flow") as parent_span:
         parent_ctx = set_span_in_context(parent_span)
 
@@ -53,7 +61,6 @@ def test_reassign_flow(mock_get_config, mock_get_env):
             log_message="Reassign flow started"
         )
 
-        # Call child span: Reassign Flow Validator
         run_validator_steps(parent_ctx, common_kwargs)
 
         LogManager.info(
@@ -62,6 +69,7 @@ def test_reassign_flow(mock_get_config, mock_get_env):
             step="Reassign Flow",
             log_message="Reassign flow completed"
         )
+
 
 if __name__ == "__main__":
     test_reassign_flow()

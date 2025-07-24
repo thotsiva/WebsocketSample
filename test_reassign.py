@@ -3,28 +3,27 @@ import time
 from unittest.mock import patch
 from logger.log_manager import LogManager
 from opentelemetry.trace import set_span_in_context
-import atexit
-
 
 def run_validator_steps(parent_ctx, common_kwargs):
-    with LogManager.elf.start_span("validator_steps", ctx=parent_ctx) as span:
-        ctx = set_span_in_context(span)
-        LogManager.info(
-            parent_context=ctx,
-            **common_kwargs,
-            step="Reassign Validator",
-            log_message="Validator started successfully"
-        )
-
-        time.sleep(1)  # Reduced for testing
+    # Child span of "reassign_conversation_steps"
+    with LogManager.elf.start_span("Reassign Flow Validator", ctx=parent_ctx) as validator_span:
+        validator_ctx = set_span_in_context(validator_span)
 
         LogManager.info(
-            parent_context=ctx,
+            parent_context=validator_ctx,
             **common_kwargs,
-            step="Reassign Validator",
-            log_message="Validator ended successfully"
+            step="Reassign Flow Validator",
+            log_message="Reassign flow validator called"
         )
 
+        time.sleep(1)  # Simulate processing delay
+
+        LogManager.info(
+            parent_context=validator_ctx,
+            **common_kwargs,
+            step="Reassign Flow Validator",
+            log_message="Reassign flow validated successfully"
+        )
 
 @patch(target="logger.log_manager.get_env", return_value="default")
 @patch("logger.log_manager.get_config")
@@ -43,7 +42,8 @@ def test_reassign_flow(mock_get_config, mock_get_env):
         "event": "reassignConversationEvent"
     }
 
-    with LogManager.elf.start_span("reassign_conversation_steps") as parent_span:
+    # Root span: Reassign flow
+    with LogManager.elf.start_span("Reassign Flow") as parent_span:
         parent_ctx = set_span_in_context(parent_span)
 
         LogManager.info(
@@ -53,6 +53,7 @@ def test_reassign_flow(mock_get_config, mock_get_env):
             log_message="Reassign flow started"
         )
 
+        # Call child span: Reassign Flow Validator
         run_validator_steps(parent_ctx, common_kwargs)
 
         LogManager.info(
@@ -62,25 +63,5 @@ def test_reassign_flow(mock_get_config, mock_get_env):
             log_message="Reassign flow completed"
         )
 
-
-def shutdown_tracing():
-    """Safely shutdown tracing and logging processors"""
-    try:
-        tracer_provider = LogManager.elf.tracer._tracer_provider
-        if hasattr(tracer_provider, "shutdown"):
-            tracer_provider.shutdown()
-
-        if hasattr(LogManager.elf.logger_provider, "shutdown"):
-            LogManager.elf.logger_provider.shutdown()
-
-    except Exception as e:
-        print(f"Error during shutdown: {e}")
-
-
-# Register safe shutdown
-atexit.register(shutdown_tracing)
-
-
 if __name__ == "__main__":
     test_reassign_flow()
-    print("✅ Test complete. Check logs/spans.")

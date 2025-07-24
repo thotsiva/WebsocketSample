@@ -3,85 +3,69 @@ import time
 from unittest.mock import patch
 
 from logger.log_manager import LogManager
+from opentelemetry.trace import set_span_in_context
+from opentelemetry import context as otel_context
 
 
-@patch("logger.log_manager.get_env", return_value="default")
+def run_validator_steps(parent_ctx, common_kwargs):
+    # Explicitly pass parent context while starting the child span
+    with LogManager.elf.start_span("Reassign Flow Validator", ctx=parent_ctx) as validator_span:
+        validator_ctx = set_span_in_context(validator_span)
+
+        LogManager.info(
+            parent_context=validator_ctx,
+            **common_kwargs,
+            step="Reassign Flow Validator",
+            log_message="Reassign flow validator called"
+        )
+
+        time.sleep(1)
+
+        LogManager.info(
+            parent_context=validator_ctx,
+            **common_kwargs,
+            step="Reassign Flow Validator",
+            log_message="Reassign flow validated successfully"
+        )
+
+
+@patch(target="logger.log_manager.get_env", return_value="default")
 @patch("logger.log_manager.get_config")
-def simulate_reassign_flow(mock_get_config, mock_get_env):
+def test_reassign_flow(mock_get_config, mock_get_env):
     # Mock config data
     mock_get_config.return_value = {
         "pii_fields": []
     }
 
+    LogManager.initialize()
+
     correlation_id = str(uuid.uuid4())
     common_kwargs = {
         "correlationId": correlation_id,
-        "user": "john.doe",
+        "user": "elf_testing",
         "event": "reassignConversationEvent"
     }
 
     # Start parent span for the flow
-    with LogManager.elf.start_span("reassign_conversation_flow") as parent_ctx:
+    with LogManager.elf.start_span("Reassign Flow") as parent_span:
+        parent_ctx = set_span_in_context(parent_span)
 
         LogManager.info(
             parent_context=parent_ctx,
             **common_kwargs,
             step="Reassign Flow",
-            message="Reassign flow started"
+            log_message="Reassign flow started"
         )
 
-        # Validator steps
-        LogManager.info(
-            parent_context=parent_ctx,
-            **common_kwargs,
-            step="Reassign Validator",
-            message="Validator started successfully"
-        )
-        time.sleep(0.2)
-        LogManager.info(
-            parent_context=parent_ctx,
-            **common_kwargs,
-            step="Reassign Validator",
-            message="Validator ended successfully"
-        )
-
-        # Handler steps
-        LogManager.info(
-            parent_context=parent_ctx,
-            **common_kwargs,
-            step="Reassign Handler",
-            message="Handler started successfully"
-        )
-        time.sleep(0.2)
-        LogManager.info(
-            parent_context=parent_ctx,
-            **common_kwargs,
-            step="Reassign Handler",
-            message="Handler ended successfully"
-        )
-
-        # Helper steps
-        LogManager.info(
-            parent_context=parent_ctx,
-            **common_kwargs,
-            step="Reassign Helper",
-            message="Helper started successfully"
-        )
-        time.sleep(0.2)
-        LogManager.info(
-            parent_context=parent_ctx,
-            **common_kwargs,
-            step="Reassign Helper",
-            message="Helper ended successfully"
-        )
+        run_validator_steps(parent_ctx, common_kwargs)
 
         LogManager.info(
             parent_context=parent_ctx,
             **common_kwargs,
             step="Reassign Flow",
-            message="Reassign flow completed"
+            log_message="Reassign flow completed"
         )
 
 
 if __name__ == "__main__":
-    simulate_reassign_flow()
+    test_reassign_flow()

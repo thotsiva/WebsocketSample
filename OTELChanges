@@ -1,0 +1,295 @@
+import os
+import socket
+import grpc
+import logging
+
+from typing import Optional
+from environs import Env
+
+from opentelemetry import trace, baggage, metrics
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_NAMESPACE, SERVICE_INSTANCE_ID, DEPLOYMENT_ENVIRONMENT
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor, SimpleLogRecordProcessor, ConsoleLogExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader, ConsoleMetricExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as OTLPSpanExporterGRPC
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as OTLPMetricExporterGRPC
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter as OTLPLogExporterGRPC
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPSpanExporterHTTP
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter as OTLPMetricExporterHTTP
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter as OTLPLogExporterHTTP
+
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+from opentelemetry.instrumentation.asyncio import AsyncioInstrumentor
+from opentelemetry.instrumentation.logging import LoggingInstrumentor
+from opentelemetry.instrumentation.logging.environment_variables import OTEL_PYTHON_LOG_CORRELATION
+
+from commons.util import get_config
+from constants import constants
+
+# Enable trace-log correlation
+os.environ[OTEL_PYTHON_LOG_CORRELATION] = 'True'
+
+env = Env()
+env.read_env()
+
+class OpenTelemetryManager:
+    def __init__(self, environment: str,
+                 protocol: Optional[str] = "http",
+                 _exporter: Optional[str] = "external",
+                 _aggregation_type: Optional[str] = "batch",
+                 _span_processor_type: Optional[str] = "",
+                 _log_processor_type: Optional[str] = "",
+                 _num_threads: Optional[int] = 2,
+                 cert_bytes: Optional[bytes] = None,
+                 certificate_path: Optional[str] = "") -> None:
+
+        config_data = get_config()
+        self.pii_fields = config_data.get('pii_fields')
+        self.endpoint_map = constants.endpoint_map
+
+        deployment_env = "E0" if environment.lower() == "default" else environment.upper()
+        credentials = grpc.ssl_channel_credentials(root_certificates=cert_bytes)
+
+        # Auto-instrumentation
+        AioHttpClientInstrumentor().instrument()
+        AsyncioInstrumentor().instrument()
+        LoggingInstrumentor().instrument(set_logging_format=True)
+
+        # Resource metadata
+        self.resource = self.create_resource({
+            "DEPLOYMENT_ENVIRONMENT": deployment_env
+        })
+
+        # Set up tracer provider
+        trace.set_tracer_provider(TracerProvider(resource=self.resource))
+        self.tracer = trace.get_tracer(__name__)
+
+        # Set up logger provider
+        self.logger_provider = LoggerProvider(resource=self.resource)
+        from opentelemetry._logs import set_logger_provider
+        set_logger_provider(self.logger_provider)
+
+        # FIX: Get all 3 exporters
+        self.span_exporter, self.logs_exporter, self.metrics_exporter = self.set_exporters(
+            protocol, credentials, certificate_path, deployment_env
+        )
+
+        # Span processor
+        span_processor = BatchSpanProcessor(self.span_exporter) if _aggregation_type == "batch" \
+            else SimpleSpanProcessor(self.span_exporter)
+        trace.get_tracer_provider().add_span_processor(span_processor)
+
+        # Log processor
+        log_processor = BatchLogRecordProcessor(self.logs_exporter) if _aggregation_type == "batch" \
+            else SimpleLogRecordProcessor(self.logs_exporter)
+        self.logger_provider.add_log_record_processor(log_processor)
+
+        # Metric reader
+        self.meter_provider = MeterProvider(
+            resource=self.resource,
+            metric_readers=[PeriodicExportingMetricReader(self.metrics_exporter)]
+        )
+        metrics.set_meter_provider(self.meter_provider)
+
+    def create_resource(self, required: dict) -> Optional[Resource]:
+        try:
+            return Resource(attributes={
+                SERVICE_NAME: self.get_env_var("APP_NAME", "AskAmex Logger"),
+                SERVICE_NAMESPACE: self.get_env_var("NAMESPACE", "Development"),
+                "service.car.id": self.get_env_var("CARID", "600802911"),
+                SERVICE_INSTANCE_ID: socket.gethostname(),
+                DEPLOYMENT_ENVIRONMENT: required.get("DEPLOYMENT_ENVIRONMENT", "E0"),
+            })
+        except Exception as e:
+            logging.error(f"Error creating OpenTelemetry resource: {e}")
+            return None
+
+    def start_span(self, span_name: str, ctx: Optional[object] = None):
+        try:
+            return self.tracer.start_as_current_span(span_name, context=ctx)
+        except Exception as e:
+            logging.error(f"Error starting span '{span_name}': {e}")
+            return None
+
+    def set_exporters(self, protocol: str, credentials: grpc.ChannelCredentials,
+                      cert_path: str, deployment_env: str):
+
+        # Fallback to env vars or predefined endpoint map
+        traces_endpoint = self.get_env_var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+        logs_endpoint = self.get_env_var("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "")
+        metrics_endpoint = self.get_env_var("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "")
+
+        exporters = {
+            "grpc": {
+                "span": lambda: OTLPSpanExporterGRPC(credentials=credentials,
+                    endpoint=traces_endpoint or self.endpoint_map["grpc"][deployment_env]),
+                "logs": lambda: OTLPLogExporterGRPC(credentials=credentials,
+                    endpoint=logs_endpoint or self.endpoint_map["grpc"][deployment_env]),
+                "metrics": lambda: OTLPMetricExporterGRPC(credentials=credentials,
+                    endpoint=metrics_endpoint or self.endpoint_map["grpc"][deployment_env]),
+            },
+            "http": {
+                "span": lambda: OTLPSpanExporterHTTP(certificate_file=cert_path,
+                    endpoint=traces_endpoint or self.endpoint_map["http"][f"{deployment_env}_traces"]),
+                "logs": lambda: OTLPLogExporterHTTP(certificate_file=cert_path,
+                    endpoint=logs_endpoint or self.endpoint_map["http"][f"{deployment_env}_logs"]),
+                "metrics": lambda: OTLPMetricExporterHTTP(certificate_file=cert_path,
+                    endpoint=metrics_endpoint or self.endpoint_map["http"][f"{deployment_env}_metrics"]),
+            },
+            "console": {
+                "span": lambda: ConsoleSpanExporter(),
+                "logs": lambda: ConsoleLogExporter(),
+                "metrics": lambda: ConsoleMetricExporter(),
+            }
+        }
+
+        if protocol not in exporters:
+            raise ValueError(f"Unsupported protocol: {protocol}")
+
+        return (
+            exporters[protocol]["span"](),
+            exporters[protocol]["logs"](),
+            exporters[protocol]["metrics"]()
+        )
+
+    @staticmethod
+    def get_env_var(var_name: str, default: str = "NONE") -> str:
+        """Get env var or return default."""
+        return env(var_name, default=default)
+
+
+
+
+
+
+----------------------------------------------------------
+
+
+
+
+import re
+import uuid
+import logging
+import asyncio
+
+from commons.util import (
+    get_config, get_env, get_kafka_env, get_kafka_keys_async,
+    get_kafka_keys_sync, get_elf_certs_sync, get_elf_certs_async
+)
+
+from logger.kafka_manager import KafkaManager
+from logger.console_manager import ConsoleManager
+from logger.otel_manager import OpenTelemetryManager
+
+from opentelemetry.sdk._logs import LoggingHandler
+
+
+class LogManager(OpenTelemetryManager):
+    FORMAT = '%(asctime)s %(levelname)s [%(threadName)s] %(message)s'
+    formatter = logging.Formatter(FORMAT)
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(format=FORMAT, level=logging.INFO)
+
+    config_data = get_config()
+    loop = asyncio.get_event_loop()
+    _environment = get_env()
+    _initialized = False
+    pii_fields = None
+
+    @classmethod
+    def initialize(cls):
+        if cls._initialized:
+            return
+
+        if cls._environment == 'default':
+            cls.elf = OpenTelemetryManager(environment=cls._environment, protocol='console')
+            cls.logger.addHandler(ConsoleManager())
+        else:
+            if cls.loop.is_running():
+                pk_path, vault_keys_enabled = get_kafka_keys_sync(cls.config_data)
+                cert_bytes, cert_path = get_elf_certs_sync(cls._environment, cls.config_data)
+            else:
+                pk_task = get_kafka_keys_async(cls.config_data)
+                cert_task = get_elf_certs_async(cls._environment, cls.config_data)
+                (pk_path, vault_keys_enabled), (cert_bytes, cert_path) = cls.loop.run_until_complete(
+                    asyncio.gather(pk_task, cert_task)
+                )
+
+            cls.elf = OpenTelemetryManager(
+                environment=cls._environment,
+                protocol='http',
+                cert_bytes=cert_bytes,
+                certificate_path=cert_path
+            )
+
+            kafka_manager = KafkaManager(
+                cls.config_data.get('kafka_server', 'dev').format(get_kafka_env()),
+                cls.config_data.get('kafka_topic', ''),
+                cls.config_data.get('pem_path', '').format(
+                    'dev' if 'e3' not in cls._environment else cls._environment
+                ),
+                pk_path,
+                cls.config_data.get('message_retry', 3),
+                cls.config_data.get('message_acks', 0),
+                keys_enabled=vault_keys_enabled
+            )
+            kafka_manager.setFormatter(cls.formatter)
+            cls.logger.addHandler(kafka_manager)
+
+        # Avoid duplicate LoggingHandler with same logger_provider
+        if not any(isinstance(h, LoggingHandler) and getattr(h, 'logger_provider', None) == cls.elf.logger_provider
+                   for h in cls.logger.handlers):
+            cls.logger.addHandler(LoggingHandler(level=logging.INFO, logger_provider=cls.elf.logger_provider))
+
+        cls.pii_fields = cls.config_data.get('pii_fields', '')
+        cls._initialized = True
+
+    @classmethod
+    def encrypt_pii(cls, msg):
+        if not cls.pii_fields:
+            return msg
+        pattern = r"(?i)\b(" + '|'.join(cls.pii_fields.split(',')) + r")[:,=]?[^\s\"']+"
+        return re.sub(pattern, r'\1="****"', str(msg))
+
+    @classmethod
+    def format_log_message(cls, **kwargs):
+        kwargs.setdefault('event_id', str(uuid.uuid4()))
+        return ' '.join([f'{key}="{cls.encrypt_pii(value)}"' for key, value in kwargs.items()])
+
+    @staticmethod
+    def _set_span_attributes(span, kwargs):
+        if span:
+            span.set_attribute("tested_by", "elf_migration_changes")
+            for key, value in kwargs.items():
+                span.set_attribute(key, value)
+
+    @classmethod
+    def info(cls, parent_context=None, **kwargs):
+        cls.initialize()
+        with cls.elf.start_span("log_info", ctx=parent_context) as span:
+            cls._set_span_attributes(span, kwargs)
+            cls.logger.info(cls.format_log_message(**kwargs))
+
+    @classmethod
+    def error(cls, parent_context=None, **kwargs):
+        cls.initialize()
+        with cls.elf.start_span("log_error", ctx=parent_context) as span:
+            cls._set_span_attributes(span, kwargs)
+            cls.logger.error(cls.format_log_message(**kwargs))
+
+    @classmethod
+    def debug(cls, parent_context=None, **kwargs):
+        cls.initialize()
+        with cls.elf.start_span("log_debug", ctx=parent_context) as span:
+            cls._set_span_attributes(span, kwargs)
+            cls.logger.debug(cls.format_log_message(**kwargs))
+
+    @classmethod
+    def warning(cls, parent_context=None, **kwargs):
+        cls.initialize()
+        with cls.elf.start_span("log_warning", ctx=parent_context) as span:
+            cls._set_span_attributes(span, kwargs)
+            cls.logger.warning(cls.format_log_message(**kwargs))

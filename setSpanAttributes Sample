@@ -1,0 +1,49 @@
+@staticmethod
+def set_span_attributes(span, attributes):
+    # Add a fixed attribute for trace origin tracking
+    span.set_attribute("tested_by", "elf_migration_changes")
+
+    # Helper to recursively flatten nested dicts/lists into key-value pairs
+    def flatten(prefix, value):
+        if isinstance(value, dict):
+            for k, v in value.items():
+                # Use dot notation for nested dict keys
+                yield from flatten(f"{prefix}.{k}" if prefix else k, v)
+        elif isinstance(value, list):
+            for i, item in enumerate(value):
+                # Use bracket notation for list indices
+                yield from flatten(f"{prefix}[{i}]", item)
+        else:
+            # Yield final flat key-value pair
+            yield prefix, value
+
+    for key, value in attributes.items():
+        parsed = value  # Default: use the original value
+
+        # Handle CIMultiDictProxy string (special header-like object)
+        if isinstance(value, str):
+            if value.startswith("<CIMultiDictProxy("):
+                match = re.search(r"<CIMultiDictProxy\((\{.*\})\)>", value)
+                if match:
+                    try:
+                        parsed = ast.literal_eval(match.group(1))
+                    except Exception:
+                        pass  # Fallback to original string if parsing fails
+            else:
+                # Try parsing as JSON string
+                try:
+                    parsed = json.loads(value)
+                except Exception:
+                    # Fallback: try Python literal (e.g., list, dict, tuple)
+                    try:
+                        parsed = ast.literal_eval(value)
+                    except Exception:
+                        pass  # Keep original value if all parsing fails
+
+        # If the parsed value is a dict or list, flatten it
+        if isinstance(parsed, (dict, list)):
+            for flat_key, flat_value in flatten(key, parsed):
+                span.set_attribute(flat_key, str(flat_value))
+        else:
+            # Simple value: set directly
+            span.set_attribute(key, str(parsed))

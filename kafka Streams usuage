@@ -1,0 +1,86 @@
+High-level summary
+No changes outside wfm_arise-Data Services (Cornerstone, CDART/CDE, Kafka(DII), Postgres AppDB, Slack pipeline, Genesys SDK, UI/API, ML model/serving remain as-is).
+
+Change: Replace the Python-based consumers (Stage Data Services & AppDB Data Services) with Kafka Streams applications (Java, using Kafka Streams API).
+
+Kafka Streams will consume the same Kafka topics, perform the same metadata/metrics/schedule normalization and transformations, and write outputs to the same Staging / ML / UI targets (either by producing to new Kafka sink topics or writing to DB using Connect/custom sinks).
+
+End-to-end flow (step-by-step)
+WFM systems (SOR ConneX / WFM servers)
+
+Produce raw events/messages (BAU extracts, 15-min metrics extracts, schedules) into Kafka (DII) topics (same topics as today).
+
+Kafka (DII)
+
+Holds topics for metadata, metrics, schedule, BAU extracts, etc. (topic partitions and retention unchanged).
+
+Hydra / wfm_arise-Data Services → (NOW) Kafka Streams
+
+Kafka Streams apps replace Python consumers. Each logical service becomes one or more stream processors:
+
+Stage Streams (replacing Stage Data Services): does ingestion + metadata mapping + schedule ingestion + initial normalization for 24-hour and 15-min flows.
+
+AppDB Streams (replacing AppDB Data Services): does metrics transformations, schedule transformation, aggregations/joins and prepares inputs for the ML DB and UI DB.
+
+Optionally, a dedicated Streams app for ML pre-processing and one for UI formatting if separation helps scale.
+
+Processing behaviors:
+
+Stateful joins/aggregations use local state stores (RocksDB).
+
+Use Schema Registry (Avro/Protobuf) for stable schemas.
+
+Use exactly-once or at-least-once semantics as required (Kafka Streams supports EOS with Kafka brokers).
+
+Streams apps produce outputs either:
+
+to internal Kafka sink topics (Staging topic / ML topic / SC topic), OR
+
+use a JDBC sink connector (Kafka Connect) or a small, well-tested sink microservice to write into Postgres Staging / ML / UI DBs.
+
+Postgres AppDB (Staging / ML / UI DB)
+
+Receives data written by Streams (via Kafka sink topics + Connect JDBC sink or direct DB writers).
+
+Same tables and timing as current design (15-min ingestion, 20-min AppDB load, 24-hr loads remain).
+
+ML Model / Cornerstone
+
+ML model training & governance stays unchanged — still reads 3 yrs data from Cornerstone store / ML DB and outputs model artifact (pickle/resin) as today.
+
+wfm_arise-API / wfm_arise-UI / Team leaders
+
+No change — UI/API query Postgres UI DB for recommendations / availability / forecasts.
+
+Downstream flows (Slack Bot, OneAssist Framework, Genesys SDK)
+
+Periodic pipelines (every 20 minutes) and the Slack / OneAssist integrations remain unchanged and still read from Postgres / Data Pipeline as before.
+
+
+Key implementation details & recommendations
+Topic strategy: keep current topics but add clearly-named sink topics if you want to use Kafka Connect to write into Postgres (e.g., staging.out, ml.out, ui.out).
+
+Schema registry: adopt Avro/Protobuf and a schema registry to guarantee compatibility.
+
+Stateful processing: use Kafka Streams state stores for schedule/metrics aggregation and joins; RocksDB is default.
+
+Idempotent/transactional sinks:
+
+If writing directly from Streams to DB, ensure idempotency (upserts) or use Kafka Connect JDBC sink (with exactly-once semantics via transactional writes if needed).
+
+Alternatively write to sink Kafka topics and use Kafka Connect for JDBC sink (simpler operationally).
+
+Scaling / deployment: package Streams apps as Spring Boot / Quarkus services and run in k8s (one instance per Kafka partition group). Tune parallelism by topic partitions.
+
+Monitoring & observability: add metrics (Micrometer/Prometheus), partition lag monitoring, state store sizes, and alerting for processing failures.
+
+Testing: unit test stream topology (TopologyTestDriver) and run staging benchmarks vs current Python consumers.
+
+Operational benefits (what management will want to hear)
+Lower latency / higher throughput (Kafka Streams is JVM-native and optimized for Kafka).
+
+Built-in fault tolerance & scaling — simpler to scale than multiple Python consumer processes.
+
+Stronger exactly-once processing options and better stateful processing support for aggregations/joins.
+
+Easier maintenance for production streaming logic (typed Java code, telemetry, and strong testing tools).
